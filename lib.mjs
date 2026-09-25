@@ -146,6 +146,7 @@ export const buildSessions = (now = Date.now()) => {
             const summary = fs.existsSync(path.join(SUMMARY_DIR, `${id}.md`))
                 ? fs.readFileSync(path.join(SUMMARY_DIR, `${id}.md`), 'utf8')
                 : null;
+            const status = deriveStatus({ state, hasReport: !!report, confirmedAt: confirmed[id] });
             return {
                 id,
                 cli,
@@ -153,7 +154,7 @@ export const buildSessions = (now = Date.now()) => {
                 animal: ANIMALS[hash(id) % ANIMALS.length],
                 repo: path.basename(app?.originCwd || cwd),
                 repoHue: hash(app?.originCwd || cwd) % 360,
-                status: deriveStatus({ state, hasReport: !!report, confirmedAt: confirmed[id] }),
+                status,
                 event: state?.event || null,
                 eventAt: state?.at || null,
                 message: state?.message || null,
@@ -167,9 +168,29 @@ export const buildSessions = (now = Date.now()) => {
                 transcript,
                 report,
                 summary,
+                diffStat: ['review', 'question'].includes(status) ? statFor(id, state?.at, app) : null,
                 preview: report ? null : lastText.slice(0, 300),
             };
         });
+};
+
+// Diff shortstat for cards; cached per (session, event) so polling doesn't re-run git.
+const statCache = new Map();
+const statFor = (id, at, app) => {
+    const wt = app?.worktreePath;
+    if (!wt || !fs.existsSync(wt)) return null;
+    const key = `${id}:${at}`;
+    if (!statCache.has(key)) {
+        try {
+            const base = git(wt, ['merge-base', app.sourceBranch || 'HEAD', 'HEAD']).trim();
+            const out = git(wt, ['diff', '--shortstat', base]);
+            const n = re => Number((out.match(re) || [])[1] || 0);
+            statCache.set(key, { files: n(/(\d+) files? changed/), add: n(/(\d+) insertions?/), del: n(/(\d+) deletions?/) });
+        } catch {
+            statCache.set(key, null);
+        }
+    }
+    return statCache.get(key);
 };
 
 const git = (cwd, args) =>

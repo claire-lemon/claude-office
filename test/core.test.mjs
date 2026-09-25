@@ -65,6 +65,10 @@ test('buildSessions + diff on simulated office', () => {
     assert.deepEqual(d.files.map(f => f.path), ['views.ts']);
     assert.deepEqual(d.untracked, ['new-file.md']);
     assert.equal(lib.diffFor(byId.local_1).tracked, false);
+    assert.equal(byId.local_0.diffStat, null);
+    hook({ session_id: 'cli-0', hook_event_name: 'Stop' });
+    const stopped = lib.buildSessions().find(s => s.id === 'local_0');
+    assert.deepEqual(stopped.diffStat, { files: 1, add: 1, del: 0 });
 });
 
 test('buildSessions survives a missing app dir (hook-only sessions)', () => {

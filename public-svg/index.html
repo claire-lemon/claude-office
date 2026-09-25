@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오늘의 사무실</title>
+<style>
+  :root{
+    --bg:#faf3e8; --bg-panel:#fffaf2; --card:#ffffff; --ink:#4a3b2f; --muted:#9c8b7c;
+    --line:#ecdfcc; --accent:#ff9eb0; --desk:#d8b88a; --desk-edge:#c7a374;
+    --good:#4f9e6d; --warn:#b9791a; --bad:#c73d34; --sky-day:#bfe4ff; --sky-night:#16204a;
+    --sun:#ffd873; --moon:#e7e7f5; --star:#fff8d6; --bubble-bg:#ffffff; --bubble-danger:#ffe3e1;
+    --add-bg:#e4f6e8; --add-ink:#1e6b34; --del-bg:#fce7e6; --del-ink:#a3271d;
+    --shadow:0 2px 10px rgba(90,60,30,.14);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#241f2b; --bg-panel:#2c2632; --card:#332c3b; --ink:#f1e9e0; --muted:#b6a9c2;
+      --line:#453b52; --accent:#ff9eb0; --desk:#7a5b3d; --desk-edge:#5f4630;
+      --good:#7fd8a0; --warn:#f0c169; --bad:#ff8a82; --sky-day:#3c5a86; --sky-night:#0a0f24;
+      --sun:#ffd873; --moon:#cfd3f0; --star:#fff8d6; --bubble-bg:#3a3242; --bubble-danger:#4a2b2b;
+      --add-bg:#1c3a26; --add-ink:#8be3a6; --del-bg:#3d2222; --del-ink:#ff9d94;
+      --shadow:0 2px 10px rgba(0,0,0,.45);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{max-width:100%; overflow-x:hidden;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;}
+  h1,h2,h3,h4,h5{margin:0 0 6px;}
+  button{font:inherit; cursor:pointer;}
+  .hidden{display:none !important;}
+
+  .topbar{display:flex; align-items:center; gap:18px; padding:12px 20px; background:var(--bg-panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:10;}
+  .topbar h1{font-size:18px;}
+  .counters{display:flex; gap:10px; margin-left:auto;}
+  .counter{display:flex; flex-direction:column; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:4px 14px; min-width:64px;}
+  .counter .num{font-size:18px; font-weight:700;}
+  .counter .label{font-size:11px; color:var(--muted);}
+  #cnt-pending .num{color:var(--warn);}
+  #cnt-blocked .num{color:var(--bad);}
+  .icon-btn{background:var(--card); border:1px solid var(--line); border-radius:10px; width:38px; height:38px; font-size:16px; flex:none;}
+
+  @media (max-width:640px){
+    .topbar{flex-wrap:wrap; row-gap:8px;}
+    .topbar h1{order:1; font-size:16px;}
+    #sound-toggle{order:2;}
+    .counters{order:3; flex-basis:100%; margin-left:0;}
+  }
+
+  .stage{display:flex; gap:16px; padding:16px 20px 40px; align-items:flex-start; min-width:0; transition:margin-right .2s ease;}
+  @media (min-width:1400px){ body.panel-open .stage{margin-right:380px;} }
+  .main-col{flex:1; min-width:0; display:flex; flex-direction:column; gap:18px;}
+
+  .panel-backdrop{position:fixed; inset:0; background:rgba(30,20,12,.38); opacity:0; pointer-events:none; transition:opacity .2s ease; z-index:19;}
+  body.panel-open .panel-backdrop{opacity:1; pointer-events:auto;}
+  @media (min-width:1400px){ .panel-backdrop{display:none;} }
+
+  .office{background:var(--bg-panel); border:1px solid var(--line); border-radius:16px; padding:14px; position:relative;}
+  .office-decor{display:flex; gap:10px; margin-bottom:10px;}
+  .decor{display:block;}
+  .window{width:120px; height:78px;}
+  .window .frame{fill:var(--desk-edge);}
+  .window .sky{fill:var(--sky-day);}
+  .window.night .sky{fill:var(--sky-night);}
+  .window .moon,.window .star{display:none;}
+  .window.night .sun{display:none;}
+  .window.night .moon,.window.night .star{display:block;}
+  .window .mullion{stroke:var(--desk-edge); stroke-width:2;}
+  .plant{width:60px; height:78px;}
+
+  .desks{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); grid-template-rows:repeat(2,1fr); gap:10px;}
+  .desk{position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:6px 6px 8px; display:flex; flex-direction:column; align-items:center; min-width:0;}
+  .desk.occupied{cursor:pointer;}
+  .desk.occupied:hover{box-shadow:var(--shadow); transform:translateY(-1px);}
+  .desk-visual{width:100%; aspect-ratio:64/86;}
+  .desk-visual svg{width:100%; height:100%; shape-rendering:crispEdges;}
+  .nameplate{margin-top:2px; font-size:11px; font-weight:600; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:1px 6px; background:var(--bg); border-radius:6px;}
+  .empty-label{font-size:11px; color:var(--muted); margin-top:6px;}
+  .desk:not(.empty) .empty-label{display:none;}
+  .desk.empty .nameplate,.desk.empty .bubble-slot{display:none;}
+  .char-group.grayscale{filter:grayscale(1) opacity(.55);}
+  .bubble-slot{position:absolute; top:-6px; left:0; right:0; z-index:2; display:flex; justify-content:flex-end; padding-right:2px; min-width:0;}
+  .bubble{display:flex; flex-wrap:wrap; align-items:center; gap:3px; max-width:100%; min-width:0; background:var(--bubble-bg); border:1px solid var(--line); border-radius:10px; padding:2px 6px; font-size:10px; box-shadow:var(--shadow); white-space:normal; overflow-wrap:break-word; line-height:1.25;}
+  .bubble-danger{background:var(--bubble-danger);}
+  .b-text{color:var(--ink); min-width:0;}
+  .bubble-danger .b-text{color:var(--bad); font-weight:700;}
+  .b-icon{position:relative; display:inline-block;}
+  .b-paper{margin-left:1px;}
+  .above-head{position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-weight:800; font-size:14px; color:var(--warn); animation:bounce-q 1s ease-in-out infinite;}
+  .steam{position:absolute; top:-4px; width:2px; height:6px; background:var(--muted); border-radius:2px; opacity:.6;}
+  .steam.s1{left:2px; animation:steam-rise 1.6s ease-out infinite;}
+  .steam.s2{left:8px; animation:steam-rise 1.6s ease-out infinite .5s;}
+
+  .desk[data-status="working"] .char-group{animation:bob-fast .4s ease-in-out infinite;}
+  .desk[data-status="working"] .code-line{animation:code-scroll .6s ease-in-out infinite;}
+  .desk[data-status="question"] .char-group{animation:bob-slow 1.4s ease-in-out infinite;}
+  .desk[data-status="blocked"] .char-group{animation:tremble .3s ease-in-out infinite;}
+  .desk[data-status="review"] .arm-r{animation:wave-arm .8s ease-in-out infinite; transform-box:fill-box; transform-origin:top center;}
+  .anim-wave-emoji{display:inline-block; animation:wave-arm .8s ease-in-out infinite;}
+
+  @keyframes bob-fast{0%,100%{transform:translateY(0)} 50%{transform:translateY(-2.5px)}}
+  @keyframes bob-slow{0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)}}
+  @keyframes tremble{0%,100%{transform:translateX(0)} 50%{transform:translateX(1px)}}
+  @keyframes wave-arm{0%,100%{transform:rotate(0deg)} 50%{transform:rotate(-20deg)}}
+  @keyframes code-scroll{0%,100%{opacity:.55} 50%{opacity:1}}
+  @keyframes steam-rise{0%{transform:translateY(0); opacity:.6} 100%{transform:translateY(-9px); opacity:0}}
+  @keyframes bounce-q{0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-4px)}}
+  @keyframes stamp-bang{0%{transform:scale(3) rotate(-12deg); opacity:0} 35%{transform:scale(1) rotate(-8deg); opacity:1} 75%{transform:scale(1) rotate(-8deg); opacity:1} 100%{opacity:0}}
+
+  .kanban{background:var(--bg-panel); border:1px solid var(--line); border-radius:16px; padding:14px; min-width:0;}
+  .kan-columns{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:8px;}
+  @media (max-width:800px){ .kan-columns{grid-template-columns:repeat(2,minmax(0,1fr));} }
+  @media (max-width:520px){ .kan-columns{grid-template-columns:minmax(0,1fr);} }
+  .kan-col{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; min-height:120px; min-width:0;}
+  .kan-col h3{font-size:12px; color:var(--muted); text-transform:none;}
+  .kan-list{display:flex; flex-direction:column; gap:6px; min-height:24px; min-width:0;}
+  .kan-card{background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:6px 8px; cursor:pointer; min-width:0;}
+  .kan-card:hover{box-shadow:var(--shadow);}
+  .kan-card.selected{outline:2px solid var(--accent);}
+  .kan-top{display:flex; align-items:center; gap:6px; min-width:0;}
+  .kan-avatar svg{width:20px; height:28px; display:block; flex:none;}
+  .kan-title{font-size:12px; font-weight:700; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .kan-tag{font-size:10px; padding:1px 6px; border-radius:8px; background:var(--accent); color:#fff; flex:none;}
+  .kan-meta{font-size:11px; color:var(--muted); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .kan-diffstat{font-size:11px; margin-top:2px; white-space:normal; overflow-wrap:break-word;}
+  .kan-diffstat.hidden{display:none;}
+  .ds-add{color:var(--good); font-weight:700;}
+  .ds-del{color:var(--bad); font-weight:700;}
+  .tag-warn{display:inline-block; background:var(--warn); color:#fff; font-size:10px; padding:1px 6px; border-radius:8px; margin-left:4px;}
+
+  .panel{position:fixed; top:0; right:0; height:100vh; width:380px; max-width:92vw; background:var(--bg-panel);
+    border-left:1px solid var(--line); box-shadow:var(--shadow); transform:translateX(100%); transition:transform .2s ease;
+    display:flex; flex-direction:column; z-index:20;}
+  .panel.open{transform:translateX(0);}
+  .panel-close{position:absolute; top:6px; right:6px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; background:none; border:none; border-radius:8px; font-size:18px; color:var(--muted); z-index:1;}
+  .panel-close:hover{background:var(--card);}
+  .panel-head{padding:16px 40px 8px 16px;}
+  .panel-title{display:flex; align-items:center; gap:8px; min-width:0;}
+  .panel-animal svg{width:28px; height:36px; display:block; flex:none;}
+  #panel-name{font-size:15px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .panel-sub{font-size:12px; color:var(--muted); margin-top:4px;}
+  .panel-diffstat{font-size:12px; margin-top:4px;}
+  .panel-diffstat.hidden{display:none;}
+  .panel-tabs{display:flex; gap:4px; padding:0 16px; border-bottom:1px solid var(--line);}
+  .tab-btn{background:none; border:none; padding:8px 10px; font-size:13px; color:var(--muted); border-bottom:2px solid transparent;}
+  .tab-btn.active{color:var(--ink); border-color:var(--accent); font-weight:700;}
+  .panel-body{flex:1; overflow-y:auto; padding:12px 16px; position:relative;}
+  .report-sec{margin-bottom:12px; min-width:0; overflow-wrap:anywhere;}
+  .report-sec code{white-space:pre-wrap; word-break:break-all;}
+  .report-sec h4{font-size:12px; color:var(--muted); text-transform:none; margin-bottom:4px;}
+  .report-sec p{font-size:13px; line-height:1.5; margin:0 0 6px;}
+  .report-sec ul,.report-sec ol{margin:0 0 6px; padding-left:18px; font-size:13px; line-height:1.5;}
+  .report-sec code{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:0 3px; font-size:12px;}
+  .hint{font-size:12px; color:var(--muted);}
+  .diff-stat{font-size:12px; font-weight:700;}
+  .diff-file{margin-bottom:8px; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .diff-file summary{padding:6px 8px; font-size:12px; cursor:pointer; background:var(--card);}
+  .patch{margin:0; padding:8px; font-size:11px; line-height:1.4; overflow-x:auto; background:var(--card); white-space:pre;}
+  .patch .add{background:var(--add-bg); color:var(--add-ink); display:inline-block; width:100%;}
+  .patch .del{background:var(--del-bg); color:var(--del-ink); display:inline-block; width:100%;}
+  .patch .hunk{color:var(--accent); display:inline-block; width:100%;}
+  .patch .meta{color:var(--muted); display:inline-block; width:100%;}
+  .untracked ul{margin:4px 0 0; padding-left:18px; font-size:12px;}
+  .panel-actions{display:flex; flex-wrap:wrap; gap:6px; padding:10px 16px 16px; border-top:1px solid var(--line);}
+  .act-btn{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px;}
+  .act-btn:disabled{opacity:.6; cursor:default;}
+  .act-btn[data-action="confirm"],.act-btn[data-action="unconfirm"]{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .stamp-layer{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;}
+  .stamp-fx{font-size:48px; font-weight:900; color:var(--bad); border:6px solid var(--bad); border-radius:12px; padding:4px 16px;
+    transform:rotate(-8deg); animation:stamp-bang .9s ease-out forwards;}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>오늘의 사무실</h1>
+  <div class="counters">
+    <div class="counter" id="cnt-checkin"><span class="num">0</span><span class="label">출근</span></div>
+    <div class="counter" id="cnt-pending"><span class="num">0</span><span class="label">결재 대기</span></div>
+    <div class="counter" id="cnt-blocked"><span class="num">0</span><span class="label">막힘</span></div>
+  </div>
+  <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" title="알림 소리">🔔</button>
+</header>
+<div class="stage">
+  <div class="main-col">
+    <section class="office" aria-label="사무실">
+      <div class="office-decor">
+        <svg id="window-svg" class="decor window" viewBox="0 0 100 70" aria-hidden="true">
+          <rect x="2" y="2" width="96" height="66" rx="4" class="frame"/>
+          <rect x="8" y="8" width="84" height="54" class="sky"/>
+          <rect x="24" y="18" width="16" height="16" class="sun" fill="var(--sun)"/>
+          <rect x="24" y="18" width="16" height="16" class="moon" fill="var(--moon)"/>
+          <rect x="60" y="16" width="3" height="3" class="star" fill="var(--star)"/>
+          <rect x="70" y="26" width="2" height="2" class="star" fill="var(--star)"/>
+          <rect x="78" y="14" width="2" height="2" class="star" fill="var(--star)"/>
+          <line x1="50" y1="8" x2="50" y2="62" class="mullion"/>
+          <line x1="8" y1="35" x2="92" y2="35" class="mullion"/>
+        </svg>
+        <svg class="decor plant" viewBox="0 0 40 60" aria-hidden="true">
+          <rect x="12" y="42" width="16" height="14" fill="var(--desk-edge)"/>
+          <rect x="10" y="40" width="20" height="4" fill="var(--desk)"/>
+          <rect x="14" y="18" width="6" height="24" fill="#6b8f57"/>
+          <rect x="8" y="10" width="12" height="12" fill="#7fae63"/>
+          <rect x="20" y="16" width="12" height="12" fill="#6b8f57"/>
+          <rect x="14" y="4" width="12" height="12" fill="#8fc274"/>
+        </svg>
+      </div>
+      <div class="desks" id="desks"></div>
+    </section>
+    <section class="kanban" aria-label="결재함">
+      <h2>결재함</h2>
+      <div class="kan-columns">
+        <div class="kan-col" data-col="working"><h3>작업 중</h3><div class="kan-list" id="col-working"></div></div>
+        <div class="kan-col" data-col="pending"><h3>결재 대기</h3><div class="kan-list" id="col-pending"></div></div>
+        <div class="kan-col" data-col="blocked"><h3>막힘</h3><div class="kan-list" id="col-blocked"></div></div>
+        <div class="kan-col" data-col="done"><h3>완료</h3><div class="kan-list" id="col-done"></div></div>
+      </div>
+    </section>
+  </div>
+</div>
+<div class="panel-backdrop" id="panel-backdrop" aria-hidden="true"></div>
+<aside class="panel" id="panel" aria-hidden="true">
+  <button class="panel-close" id="panel-close" type="button" aria-label="닫기" title="닫기">✕</button>
+  <div class="panel-head">
+    <div class="panel-title"><span id="panel-animal" class="panel-animal"></span><strong id="panel-name"></strong></div>
+    <div class="panel-sub" id="panel-sub"></div>
+    <div class="panel-diffstat hidden" id="panel-diffstat"></div>
+  </div>
+  <div class="panel-tabs">
+    <button class="tab-btn active" data-tab="report" type="button">보고서</button>
+    <button class="tab-btn" data-tab="diff" type="button">변경사항</button>
+  </div>
+  <div class="panel-body">
+    <div class="stamp-layer" id="stamp-layer"></div>
+    <div class="tab-pane" id="pane-report"></div>
+    <div class="tab-pane hidden" id="pane-diff"></div>
+  </div>
+  <div class="panel-actions" id="panel-actions"></div>
+</aside>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="animal-defs"></defs></svg>
+<script>
+(function(){
+  'use strict';
+
+  // ---------- tiny dom helpers ----------
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // ---------- pixel animal definitions (rect-based) ----------
+  const R = (x,y,w,h,fill) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"/>`;
+  const DEFAULT_EYES = R(8,16,2,2,'#2b2b2b') + R(14,16,2,2,'#2b2b2b');
+
+  const ANIMALS = {
+    cat: {
+      head:'#f2b565', body:'#f2b565',
+      ears: R(5,4,5,7,'#f2b565')+R(6,1,3,4,'#f2b565')+R(14,4,5,7,'#f2b565')+R(15,1,3,4,'#f2b565'),
+      accent: R(9,20,6,3,'#fff8ef')+R(11,20,2,1,'#e07a8b'),
+    },
+    dog: {
+      head:'#d9a066', body:'#d9a066',
+      ears: R(0,10,5,10,'#a86b3d')+R(19,10,5,10,'#a86b3d'),
+      accent: R(9,20,6,3,'#fff3e0')+R(11,20,2,2,'#2b2b2b'),
+    },
+    rabbit: {
+      head:'#f5eee6', body:'#f5eee6', stroke:'#00000022',
+      ears: R(6,0,3,10,'#f5eee6')+R(7,2,1,6,'#f7c9d6')+R(15,0,3,10,'#f5eee6')+R(16,2,1,6,'#f7c9d6'),
+      accent: R(11,20,2,1,'#e07a8b'),
+    },
+    bear: {
+      head:'#8a5a37', body:'#8a5a37',
+      ears: R(3,7,5,5,'#6b4423')+R(16,7,5,5,'#6b4423'),
+      accent: R(8,19,8,4,'#c9a06a')+R(11,20,2,2,'#2b2b2b'),
+    },
+    penguin: {
+      head:'#232830', body:'#232830',
+      ears:'',
+      eyesUnderlay: R(6,14,5,5,'#ffffff')+R(13,14,5,5,'#ffffff'),
+      accent: R(10,20,4,3,'#f2a33d'),
+      torsoAccent: R(9,25,6,6,'#ffffff'),
+    },
+    fox: {
+      head:'#e8783c', body:'#e8783c',
+      ears: R(5,4,5,7,'#e8783c')+R(6,1,3,4,'#fff8ef')+R(14,4,5,7,'#e8783c')+R(15,1,3,4,'#fff8ef'),
+      accent: R(8,19,8,5,'#fff8ef')+R(11,20,2,1,'#2b2b2b'),
+    },
+    hamster: {
+      head:'#e3b98a', body:'#e3b98a',
+      ears: R(4,9,4,4,'#c99a67')+R(16,9,4,4,'#c99a67'),
+      accent: R(3,18,4,4,'#f3cfa0')+R(17,18,4,4,'#f3cfa0')+R(11,20,2,1,'#c97b4a'),
+    },
+    panda: {
+      head:'#ffffff', body:'#ffffff', stroke:'#00000022',
+      ears: R(3,7,5,5,'#2b2b2b')+R(16,7,5,5,'#2b2b2b'),
+      eyesUnderlay: R(5,14,6,6,'#2b2b2b')+R(13,14,6,6,'#2b2b2b'),
+      eyes: R(6,15,4,4,'#ffffff')+R(14,15,4,4,'#ffffff')+R(7,16,2,2,'#000000')+R(15,16,2,2,'#000000'),
+      accent: R(11,20,2,1,'#000000'),
+    },
+    duck: {
+      head:'#f4d35e', body:'#f4d35e', stroke:'#00000022',
+      ears:'',
+      accent: R(9,20,7,3,'#f2a33d'),
+    },
+    frog: {
+      head:'#7cb342', body:'#7cb342',
+      ears:'',
+      eyes: R(6,5,6,6,'#eaf6de')+R(8,7,3,3,'#2b2b2b')+R(12,5,6,6,'#eaf6de')+R(14,7,3,3,'#2b2b2b'),
+      accent: R(7,21,10,1,'#2b2b2b'),
+    },
+  };
+  const ANIMAL_LABELS = {cat:'고양이',dog:'강아지',rabbit:'토끼',bear:'곰',penguin:'펭귄',fox:'여우',hamster:'햄스터',panda:'판다',duck:'오리',frog:'개구리'};
+  const safeAnimal = name => (ANIMALS[name] ? name : 'cat');
+
+  const buildAnimalInner = cfg => {
+    const strokeAttr = cfg.stroke ? ` stroke="${cfg.stroke}" stroke-width="0.6"` : '';
+    const head = `<rect x="4" y="10" width="16" height="14" fill="${cfg.head}"${strokeAttr}/>`;
+    const torso = `<rect x="6" y="24" width="12" height="8" fill="${cfg.body}"${strokeAttr}/>`;
+    const eyes = cfg.eyes || DEFAULT_EYES;
+    return `${cfg.ears||''}${head}${cfg.eyesUnderlay||''}${eyes}${cfg.accent||''}${torso}${cfg.torsoAccent||''}`;
+  };
+  $('#animal-defs').innerHTML = Object.entries(ANIMALS)
+    .map(([name,cfg]) => `<symbol id="animal-${name}" viewBox="0 0 24 34">${buildAnimalInner(cfg)}</symbol>`)
+    .join('');
+
+  // ---------- desk / character svg ----------
+  // viewBox is fixed (64x86) for every desk regardless of status, so all 10 desks render at an
+  // identical size; the character is drawn at 1.8x scale so the animal reads as the focal point.
+  const emptyDeskSvg = () => `<svg viewBox="0 0 64 86">
+    <rect x="20" y="30" width="24" height="34" rx="3" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 3"/>
+    <rect x="2" y="70" width="60" height="4" fill="var(--desk-edge)"/>
+    <rect x="2" y="74" width="60" height="12" fill="var(--desk)"/>
+  </svg>`;
+
+  const monitorFill = session => session.status === 'unknown' ? '#cfd3da' : `hsl(${Number(session.repoHue)||0} 60% 82%)`;
+
+  const deskSvg = session => {
+    const animal = safeAnimal(session.animal);
+    const cfg = ANIMALS[animal];
+    const strokeAttr = cfg.stroke ? ` stroke="${cfg.stroke}" stroke-width="0.6"` : '';
+    return `<svg viewBox="0 0 64 86">
+      <rect x="18" y="2" width="28" height="18" rx="1" class="mon-screen" style="fill:${monitorFill(session)}"/>
+      <rect class="code-line" x="21" y="6" width="11" height="1.8" fill="rgba(255,255,255,.75)"/>
+      <rect class="code-line" x="21" y="10" width="18" height="1.8" fill="rgba(255,255,255,.6)"/>
+      <rect class="code-line" x="21" y="14" width="8" height="1.8" fill="rgba(255,255,255,.75)"/>
+      <rect x="29" y="20" width="6" height="5" fill="#9a9a9a"/>
+      <rect x="18" y="25" width="28" height="2" fill="#9a9a9a"/>
+      <g transform="translate(10.4,24) scale(1.8)"><!-- sizing lives here: CSS animation on .char-group would override a transform attribute -->
+        <g class="char-group">
+          <use href="#animal-${animal}" x="0" y="0" width="24" height="34"/>
+          <rect class="arm-l" x="2" y="25" width="4" height="6" fill="${cfg.body}"${strokeAttr}/>
+          <rect class="arm-r" x="18" y="25" width="4" height="6" fill="${cfg.body}"${strokeAttr}/>
+        </g>
+      </g>
+      <rect x="2" y="70" width="60" height="4" fill="var(--desk-edge)"/>
+      <rect x="2" y="74" width="60" height="12" fill="var(--desk)"/>
+    </svg>`;
+  };
+
+  const BUBBLE_HTML = {
+    working: '<div class="bubble"><span class="b-icon">⌨️</span><span class="b-text">타닥타닥</span></div>',
+    review: '<div class="bubble"><span class="b-icon anim-wave-emoji">🖐️</span><span class="b-text">보고드려요</span><span class="b-paper">📄</span></div>',
+    question: '<div class="above-head">?</div>',
+    blocked: '<div class="bubble bubble-danger"><span class="b-icon">💦</span><span class="b-text">도와주세요</span></div>',
+    done: '<div class="bubble"><span class="b-icon">☕<span class="steam s1"></span><span class="steam s2"></span></span><span class="b-text">완료</span></div>',
+    unknown: '',
+  };
+
+  const renderDesk = (el, session) => {
+    el.classList.toggle('empty', !session);
+    el.classList.toggle('occupied', !!session);
+    const visual = el.querySelector('.desk-visual');
+    if (!session) {
+      el.dataset.id = ''; el.dataset.status = '';
+      if (!visual.dataset.empty) { visual.innerHTML = emptyDeskSvg(); visual.dataset.empty = '1'; }
+      el.querySelector('.nameplate').textContent = '';
+      el.querySelector('.bubble-slot').innerHTML = '';
+      return;
+    }
+    if (el.dataset.id !== session.id || visual.dataset.empty || visual.dataset.animal !== session.animal) {
+      visual.innerHTML = deskSvg(session);
+      visual.dataset.empty = '';
+      visual.dataset.animal = session.animal;
+    } else {
+      const scr = visual.querySelector('.mon-screen');
+      if (scr) scr.style.fill = monitorFill(session);
+    }
+    el.dataset.id = session.id;
+    el.dataset.status = session.status;
+    el.querySelector('.nameplate').textContent = session.title || '(제목 없음)';
+    const charGroup = visual.querySelector('.char-group');
+    if (charGroup) charGroup.classList.toggle('grayscale', session.status === 'unknown');
+    el.querySelector('.bubble-slot').innerHTML = BUBBLE_HTML[session.status] || '';
+  };
+
+  // ---------- desk slot assignment (stable positions across polls) ----------
+  const deskSlots = new Array(10).fill(null);
+  const assignDesks = sessions => {
+    const idSet = new Set(sessions.map(s => s.id));
+    deskSlots.forEach((id,i) => { if (id && !idSet.has(id)) deskSlots[i] = null; });
+    const already = new Set(deskSlots.filter(Boolean));
+    sessions.forEach(s => {
+      if (already.has(s.id)) return;
+      const freeIdx = deskSlots.indexOf(null);
+      if (freeIdx !== -1) { deskSlots[freeIdx] = s.id; already.add(s.id); }
+    });
+  };
+
+  const desksContainer = $('#desks');
+  const deskEls = Array.from({length:10}, (_,i) => {
+    const el = document.createElement('div');
+    el.className = 'desk empty';
+    el.dataset.slot = String(i);
+    el.innerHTML = '<div class="desk-visual"></div><div class="nameplate"></div><div class="bubble-slot"></div><div class="empty-label">빈 자리</div>';
+    desksContainer.appendChild(el);
+    return el;
+  });
+  deskEls.forEach(el => { el.querySelector('.desk-visual').innerHTML = emptyDeskSvg(); el.querySelector('.desk-visual').dataset.empty = '1'; });
+
+  const renderOffice = sessionsById => {
+    const list = Array.from(sessionsById.values());
+    assignDesks(list);
+    deskSlots.forEach((id,i) => renderDesk(deskEls[i], id ? sessionsById.get(id) : null));
+  };
+
+  // ---------- window day/night ----------
+  const updateWindow = () => {
+    const h = new Date().getHours();
+    $('#window-svg').classList.toggle('night', !(h >= 6 && h < 18));
+  };
+
+  // ---------- markdown (tiny, safe) ----------
+  const inlineMd = s => escapeHtml(s).replace(/`([^`]+)`/g, (m,c) => `<code>${c}</code>`);
+  const renderMarkdown = text => {
+    const lines = String(text || '').split('\n');
+    const out = [];
+    const st = { list: null };
+    const closeList = () => { if (st.list) { out.push(`</${st.list}>`); st.list = null; } };
+    lines.forEach(raw => {
+      const line = raw.trim();
+      if (!line) { closeList(); return; }
+      const h = line.match(/^(#{2,4})\s+(.*)/);
+      if (h) { closeList(); const lvl = Math.min(h[1].length+2,6); out.push(`<h${lvl}>${inlineMd(h[2])}</h${lvl}>`); return; }
+      const bullet = line.match(/^[-*]\s+(.*)/);
+      if (bullet) { if (st.list!=='ul'){closeList(); out.push('<ul>'); st.list='ul';} out.push(`<li>${inlineMd(bullet[1])}</li>`); return; }
+      const num = line.match(/^\d+[.)]\s+(.*)/);
+      if (num) { if (st.list!=='ol'){closeList(); out.push('<ol>'); st.list='ol';} out.push(`<li>${inlineMd(num[1])}</li>`); return; }
+      closeList();
+      out.push(`<p>${inlineMd(line)}</p>`);
+    });
+    closeList();
+    return out.join('');
+  };
+
+  // ---------- kanban ----------
+  const KAN_COLUMNS = ['working','pending','blocked','done'];
+  const colEl = { working:$('#col-working'), pending:$('#col-pending'), blocked:$('#col-blocked'), done:$('#col-done') };
+  const cardEls = new Map();
+
+  const classifyColumn = s => {
+    if (s.status === 'working') return 'working';
+    if (s.status === 'review' || s.status === 'question') return 'pending';
+    if (s.status === 'blocked') return 'blocked';
+    if (s.status === 'done') return 'done';
+    return null;
+  };
+
+  const elapsed = ms => {
+    const m = Math.floor(Math.max(ms,0)/60000);
+    if (m < 1) return '방금';
+    if (m < 60) return `${m}분`;
+    const h = Math.floor(m/60);
+    if (h < 24) return `${h}시간`;
+    return `${Math.floor(h/24)}일`;
+  };
+  const countReviewItems = report => {
+    const body = report && report['리뷰 필요'];
+    if (!body) return 0;
+    return body.split('\n').filter(l => /^\s*[-*]\s+/.test(l)).length;
+  };
+  // diffStat: {files, add, del} | null — only present for review/question sessions with a worktree.
+  // A review with files===0 gets a "변경 없음" warning tag: a done report with no diff deserves a second look.
+  const diffStatHtml = session => {
+    const ds = session.diffStat;
+    if (!ds) return '';
+    const files = Number(ds.files) || 0;
+    const add = Number(ds.add) || 0;
+    const del = Number(ds.del) || 0;
+    const warn = (session.status === 'review' && files === 0) ? ' <span class="tag-warn">변경 없음</span>' : '';
+    return `<span class="ds-add">+${add}</span> <span class="ds-del">−${del}</span> · ${files}개 파일${warn}`;
+  };
+
+  const metaLine = s => {
+    if (s.status === 'review') return `리뷰 필요 ${countReviewItems(s.report)}건`;
+    if (s.status === 'blocked') return s.message ? String(s.message).slice(0,60) : '확인이 필요해요';
+    if (s.status === 'working') return s.eventAt ? `${elapsed(Date.now()-s.eventAt)} 경과` : '진행 중';
+    if (s.status === 'question') return s.preview ? String(s.preview).slice(0,40) : '질문이 있어요';
+    if (s.status === 'done') return `턴 ${s.turns ?? '-'} · 완료`;
+    return '';
+  };
+
+  const buildCard = session => {
+    const card = document.createElement('div');
+    card.className = 'kan-card';
+    card.dataset.id = session.id;
+    card.innerHTML = `<div class="kan-top"><span class="kan-avatar"><svg viewBox="0 0 24 34"><use href="#animal-${safeAnimal(session.animal)}"/></svg></span><span class="kan-title"></span><span class="kan-tag hidden"></span></div><div class="kan-meta"></div><div class="kan-diffstat hidden"></div>`;
+    return card;
+  };
+  const updateCard = (card, session) => {
+    card.querySelector('.kan-title').textContent = session.title || '(제목 없음)';
+    const tag = card.querySelector('.kan-tag');
+    const tagText = session.status === 'review' ? '보고서' : session.status === 'question' ? '질문' : '';
+    tag.textContent = tagText;
+    tag.classList.toggle('hidden', !tagText);
+    card.querySelector('.kan-meta').textContent = metaLine(session);
+    const dsEl = card.querySelector('.kan-diffstat');
+    const dsHtml = diffStatHtml(session);
+    dsEl.innerHTML = dsHtml;
+    dsEl.classList.toggle('hidden', !dsHtml);
+    card.classList.toggle('selected', session.id === selected.id);
+  };
+
+  const renderKanban = sessions => {
+    const buckets = { working:[], pending:[], blocked:[], done:[] };
+    sessions.forEach(s => { const c = classifyColumn(s); if (c) buckets[c].push(s); });
+    buckets.pending.sort((a,b) => (a.status==='review'?0:1) - (b.status==='review'?0:1));
+    KAN_COLUMNS.forEach(col => {
+      buckets[col].forEach(session => {
+        const existing = cardEls.get(session.id);
+        const card = existing || buildCard(session);
+        if (!existing) cardEls.set(session.id, card);
+        updateCard(card, session);
+        colEl[col].appendChild(card);
+      });
+    });
+    const present = new Set(KAN_COLUMNS.flatMap(c => buckets[c].map(s => s.id)));
+    Array.from(cardEls.keys()).forEach(id => {
+      if (!present.has(id)) { cardEls.get(id).remove(); cardEls.delete(id); }
+    });
+  };
+
+  // ---------- notifications ----------
+  const loadSound = () => { try { return localStorage.getItem('office.sound') !== '0'; } catch { return true; } };
+  const saveSound = v => { try { localStorage.setItem('office.sound', v ? '1':'0'); } catch {} };
+  const soundState = { on: loadSound() };
+  const updateSoundBtn = () => {
+    const b = $('#sound-toggle');
+    b.textContent = soundState.on ? '🔔' : '🔕';
+    b.setAttribute('aria-pressed', String(soundState.on));
+  };
+  updateSoundBtn();
+  $('#sound-toggle').addEventListener('click', () => { soundState.on = !soundState.on; saveSound(soundState.on); updateSoundBtn(); });
+
+  const audioRef = { ctx:null };
+  document.addEventListener('click', () => {
+    if (window.Notification && Notification.permission === 'default') { try { Notification.requestPermission(); } catch {} }
+    if (!audioRef.ctx) { try { audioRef.ctx = new (window.AudioContext||window.webkitAudioContext)(); } catch {} }
+  }, { once:true });
+
+  const playDing = () => {
+    const ctx = audioRef.ctx;
+    if (!ctx) return;
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.4);
+      o.connect(g).connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime+0.4);
+    } catch {}
+  };
+
+  const pendingRef = { prev:null };
+  const checkNotifications = list => {
+    const pending = list.filter(s => s.status==='review' || s.status==='question').length;
+    document.title = pending>0 ? `(${pending}) 결재 대기 · 오피스` : '오늘의 사무실';
+    if (pendingRef.prev !== null && pending > pendingRef.prev) {
+      if (soundState.on) playDing();
+      if (window.Notification && Notification.permission === 'granted') {
+        try { new Notification(`결재 대기 ${pending}건`, { body:'확인이 필요한 세션이 있어요', tag:'office-pending' }); } catch {}
+      }
+    }
+    pendingRef.prev = pending;
+  };
+
+  // ---------- detail panel ----------
+  const state = { sessionsById: new Map() };
+  const selected = { id:null };
+  const diffCache = new Map();
+  const summaryLoadingIds = new Set();
+  const activeTabState = { tab:'report' };
+
+  const prStateLabel = st => ({ OPEN:'열림', MERGED:'머지됨', CLOSED:'닫힘' }[st] || st || '-');
+
+  const renderPanelHeader = session => {
+    $('#panel-animal').innerHTML = `<svg viewBox="0 0 24 34"><use href="#animal-${safeAnimal(session.animal)}"/></svg>`;
+    $('#panel-name').textContent = session.title || '(제목 없음)';
+    const prLabel = (session.prs && session.prs.length) ? prStateLabel(session.prs[0].state) : '-';
+    $('#panel-sub').textContent = `${ANIMAL_LABELS[safeAnimal(session.animal)]} · ${session.branch || '-'} · PR ${prLabel} · ${session.turns ?? '-'}턴`;
+    const dsEl = $('#panel-diffstat');
+    const dsHtml = diffStatHtml(session);
+    dsEl.innerHTML = dsHtml;
+    dsEl.classList.toggle('hidden', !dsHtml);
+  };
+
+  const actionBtn = (label, action, disabled) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'act-btn'; b.dataset.action = action; b.textContent = label;
+    if (disabled) b.disabled = true;
+    return b;
+  };
+  const renderPanelActions = session => {
+    const el = $('#panel-actions');
+    el.innerHTML = '';
+    if (session.link) el.appendChild(actionBtn('채팅방 열기','open'));
+    if (session.prs && session.prs.length) el.appendChild(actionBtn('PR 열기','pr'));
+    const loading = summaryLoadingIds.has(session.id);
+    el.appendChild(actionBtn(loading ? '생성 중... (최대 60초)' : '요약 만들기', 'summary', loading));
+    el.appendChild(actionBtn(session.status==='done' ? '컨펌 취소' : '컨펌', session.status==='done' ? 'unconfirm' : 'confirm'));
+  };
+
+  const renderReportPane = session => {
+    const pane = $('#pane-report');
+    if (session.report) {
+      pane.innerHTML = Object.entries(session.report)
+        .map(([heading,body]) => `<section class="report-sec"><h4>${escapeHtml(heading)}</h4>${renderMarkdown(body)}</section>`)
+        .join('');
+    } else if (session.summary) {
+      pane.innerHTML = `<section class="report-sec">${renderMarkdown(session.summary)}</section>`;
+    } else if (session.preview) {
+      pane.innerHTML = `<section class="report-sec">${renderMarkdown(session.preview)}<p class="hint">전체 보고서가 없어 최근 응답 일부만 표시했어요. '요약 만들기'를 눌러보세요.</p></section>`;
+    } else {
+      pane.innerHTML = '<p class="hint">표시할 내용이 없어요.</p>';
+    }
+  };
+
+  const patchLines = patch => String(patch||'').split('\n').map(l => {
+    const cls = l.startsWith('+++')||l.startsWith('---') ? 'meta' : l.startsWith('@@') ? 'hunk' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : '';
+    return `<span class="${cls}">${escapeHtml(l)}</span>`;
+  }).join('\n');
+
+  const renderDiffPane = () => {
+    const pane = $('#pane-diff');
+    const entry = diffCache.get(selected.id);
+    if (!entry || entry.loading) { pane.innerHTML = '<p class="hint">변경사항을 불러오는 중...</p>'; return; }
+    if (entry.tracked === false) { pane.innerHTML = '<p class="hint">변경 추적 불가</p>'; return; }
+    if (entry.error) { pane.innerHTML = `<p class="hint">오류: ${escapeHtml(entry.error)}</p>`; return; }
+    const statLine = entry.stat ? `<p class="diff-stat">${escapeHtml(entry.stat)}</p>` : '<p class="diff-stat">변경 없음</p>';
+    const filesHtml = (entry.files||[]).map(f => `<details class="diff-file"><summary>${escapeHtml(f.path)}</summary><pre class="patch">${patchLines(f.patch)}</pre></details>`).join('');
+    const untrackedHtml = (entry.untracked||[]).length
+      ? `<div class="untracked"><h5>추적되지 않는 파일</h5><ul>${entry.untracked.map(u=>`<li>${escapeHtml(u)}</li>`).join('')}</ul></div>` : '';
+    const truncNote = entry.truncated ? '<p class="hint">내용이 커서 일부만 표시했어요.</p>' : '';
+    pane.innerHTML = statLine + truncNote + filesHtml + untrackedHtml;
+  };
+
+  const ensureDiff = async id => {
+    if (diffCache.has(id)) return;
+    diffCache.set(id, { loading:true });
+    if (selected.id === id && activeTabState.tab === 'diff') renderDiffPane();
+    try {
+      const res = await fetch(`/api/diff/${encodeURIComponent(id)}`);
+      diffCache.set(id, await res.json());
+    } catch {
+      diffCache.set(id, { tracked:true, error:'요청 실패' });
+    }
+    if (selected.id === id && activeTabState.tab === 'diff') renderDiffPane();
+  };
+
+  const setTab = tab => {
+    activeTabState.tab = tab;
+    $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    $('#pane-report').classList.toggle('hidden', tab !== 'report');
+    $('#pane-diff').classList.toggle('hidden', tab !== 'diff');
+    if (tab === 'diff') { ensureDiff(selected.id); renderDiffPane(); }
+  };
+
+  const renderPanelFull = () => {
+    const session = state.sessionsById.get(selected.id);
+    if (!session) { closePanel(); return; }
+    renderPanelHeader(session);
+    renderPanelActions(session);
+    renderReportPane(session);
+    setTab('report');
+  };
+
+  const updatePanelOnPoll = () => {
+    if (!selected.id) return;
+    const session = state.sessionsById.get(selected.id);
+    if (!session) return;
+    renderPanelHeader(session);
+    renderPanelActions(session);
+    if (activeTabState.tab === 'report') renderReportPane(session);
+  };
+
+  const openPanel = () => { $('#panel').classList.add('open'); $('#panel').setAttribute('aria-hidden','false'); document.body.classList.add('panel-open'); };
+  function closePanel(){ selected.id = null; $('#panel').classList.remove('open'); $('#panel').setAttribute('aria-hidden','true'); document.body.classList.remove('panel-open'); }
+
+  const selectSession = id => {
+    if (selected.id === id) { closePanel(); return; }
+    selected.id = id;
+    openPanel();
+    renderPanelFull();
+  };
+
+  const flashPanelError = msg => {
+    const el = $('#panel-actions');
+    const span = document.createElement('span');
+    span.className = 'hint'; span.textContent = msg;
+    el.appendChild(span);
+    setTimeout(() => span.remove(), 2500);
+  };
+
+  const fetchSummary = async id => {
+    try {
+      const res = await fetch(`/api/summary/${encodeURIComponent(id)}`, { method:'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.summary) return false;
+      const session = state.sessionsById.get(id);
+      if (session) session.summary = data.summary;
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const runSummary = async id => {
+    summaryLoadingIds.add(id);
+    if (selected.id === id) renderPanelActions(state.sessionsById.get(id));
+    const ok = await fetchSummary(id);
+    summaryLoadingIds.delete(id);
+    if (selected.id === id) {
+      const session = state.sessionsById.get(id);
+      if (session) {
+        renderPanelActions(session);
+        if (activeTabState.tab === 'report') renderReportPane(session);
+      }
+      if (!ok) flashPanelError('요약 생성 실패');
+    }
+  };
+  const runConfirm = async id => {
+    try {
+      const res = await fetch(`/api/confirm/${encodeURIComponent(id)}`, { method:'POST' });
+      if (res.ok) {
+        const layer = $('#stamp-layer');
+        const stamp = document.createElement('div');
+        stamp.className = 'stamp-fx'; stamp.textContent = '쾅';
+        layer.appendChild(stamp);
+        stamp.addEventListener('animationend', () => stamp.remove());
+        poll();
+      }
+    } catch {}
+  };
+  const runUnconfirm = async id => {
+    try { const res = await fetch(`/api/unconfirm/${encodeURIComponent(id)}`, { method:'POST' }); if (res.ok) poll(); } catch {}
+  };
+
+  const handleAction = action => {
+    const id = selected.id;
+    if (!id) return;
+    const session = state.sessionsById.get(id);
+    if (!session) return;
+    if (action === 'open') fetch(`/api/open/${encodeURIComponent(id)}`, { method:'POST' }).catch(() => {});
+    else if (action === 'pr') { const url = session.prs && session.prs[0] && session.prs[0].url; if (url) window.open(url, '_blank', 'noopener'); }
+    else if (action === 'summary') runSummary(id);
+    else if (action === 'confirm') runConfirm(id);
+    else if (action === 'unconfirm') runUnconfirm(id);
+  };
+
+  document.addEventListener('click', e => {
+    const deskEl = e.target.closest('.desk.occupied');
+    if (deskEl) { selectSession(deskEl.dataset.id); return; }
+    const cardEl = e.target.closest('.kan-card');
+    if (cardEl) { selectSession(cardEl.dataset.id); return; }
+    const tabBtn = e.target.closest('.tab-btn');
+    if (tabBtn) { setTab(tabBtn.dataset.tab); return; }
+    const actBtn = e.target.closest('.act-btn');
+    if (actBtn && !actBtn.disabled) { handleAction(actBtn.dataset.action); return; }
+    if (e.target.closest('#panel-close')) { closePanel(); return; }
+    if (e.target.closest('#panel-backdrop')) { closePanel(); return; }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && selected.id) closePanel();
+  });
+
+  // ---------- counters ----------
+  const updateCounters = list => {
+    $('#cnt-checkin .num').textContent = String(list.length);
+    $('#cnt-pending .num').textContent = String(list.filter(s => s.status==='review'||s.status==='question').length);
+    $('#cnt-blocked .num').textContent = String(list.filter(s => s.status==='blocked').length);
+  };
+
+  // ---------- poll loop ----------
+  const applySessions = list => {
+    state.sessionsById = new Map(list.map(s => [s.id, s]));
+    renderOffice(state.sessionsById);
+    renderKanban(list);
+    updateCounters(list);
+    updatePanelOnPoll();
+    checkNotifications(list);
+  };
+
+  const poll = async () => {
+    try {
+      const res = await fetch('/api/sessions', { cache:'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      applySessions(Array.isArray(data.sessions) ? data.sessions : []);
+    } catch {}
+  };
+
+  updateWindow();
+  poll();
+  setInterval(poll, 2000);
+  setInterval(updateWindow, 30000);
+})();
+</script>
+</body>
+</html>
