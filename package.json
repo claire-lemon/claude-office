@@ -1,0 +1,10 @@
+{
+  "name": "claude-office",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "demo": "node scripts/demo.mjs"
+  }
+}
