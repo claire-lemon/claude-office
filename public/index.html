@@ -165,7 +165,7 @@
   .act-btn{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px;}
   .act-btn:disabled{opacity:.6; cursor:default;}
   .act-btn[data-action="confirm"],.act-btn[data-action="unconfirm"]{background:var(--accent); color:#fff; border-color:var(--accent);}
-  .stamp-layer{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;}
+  .stamp-layer{position:fixed; inset:0; z-index:5; display:flex; align-items:center; justify-content:center; pointer-events:none;}
   .stamp-fx{font-size:48px; font-weight:900; color:var(--bad); border:6px solid var(--bad); border-radius:12px; padding:4px 16px;
     transform:rotate(-8deg); animation:stamp-bang .9s ease-out forwards;}
 </style>
