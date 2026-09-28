@@ -281,7 +281,7 @@
     <div class="tab-pane hidden" id="pane-diff"></div>
   </div>
   <div class="reply-box hidden" id="reply-box">
-    <textarea id="reply-text" rows="2" placeholder="답장을 입력하세요 · ⌘Enter로 보내기" aria-label="세션에 보낼 답장"></textarea>
+    <textarea id="reply-text" rows="2" placeholder="답장 입력 · Enter 보내기 · Shift+Enter 줄바꿈" aria-label="세션에 보낼 답장"></textarea>
     <button type="button" class="act-btn" id="reply-send">답장 보내기</button>
   </div>
   <div class="panel-actions" id="panel-actions"></div>
@@ -922,7 +922,7 @@
         const data = await res.json().catch(() => ({}));
         stampFx('쾅');
         poll();
-        flashPanelError(data.opened ? '지시문 복사됨 · 채팅방에서 ⌘V → Enter' : '지시문 복사됨 · 세션에 ⌘V → Enter', 6000);
+        deliveryToast(data, '컨펌 지시문');
       }
     } catch {}
   };
@@ -951,7 +951,13 @@
     try { renderArchive((await fetch('/api/archived').then(r => r.json())).archived || []); }
     catch { $('#archive-body').innerHTML = '<p class="hint">보관함을 불러오지 못했어요.</p>'; }
   };
-  // The app won't prefill an existing chat from a link, so the reply goes to the clipboard and the chat opens.
+  // Server tries to type it into the chat (needs macOS Accessibility); otherwise it's left on the clipboard.
+  const deliveryToast = (data, what) => {
+    if (data.auto) return flashPanelError(`${what} 전송했어요`, 4000);
+    if (data.reason === 'permission') return flashPanelError(`자동 전송은 손쉬운 사용 권한이 필요해요 · 지금은 채팅방에서 ⌘V → Enter`, 8000);
+    if (data.reason === 'mismatch') return flashPanelError(`채팅 화면을 확인하지 못해 자동 전송을 멈췄어요 · ⌘V → Enter`, 8000);
+    return flashPanelError(`${what} 복사됨 · 채팅방에서 ⌘V → Enter`, 6000);
+  };
   const sendReply = async () => {
     const id = selected.id;
     const box = $('#reply-text');
@@ -961,11 +967,16 @@
       const res = await fetch(`/api/reply/${encodeURIComponent(id)}`, { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ text }) });
       if (!res.ok) { flashPanelError(res.status === 413 ? '답장이 너무 길어요' : '답장을 보내지 못했어요'); return; }
       box.value = '';
-      flashPanelError('답장 복사됨 · 채팅방에서 ⌘V → Enter', 6000);
+      deliveryToast(await res.json().catch(() => ({})), '답장');
     } catch { flashPanelError('답장을 보내지 못했어요'); }
   };
+  // Enter sends, Shift+Enter is a newline. Enter while a Korean IME is still composing must not send
+  // (isComposing / keyCode 229), or the last syllable gets cut off.
   document.addEventListener('keydown', e => {
-    if (e.target.id === 'reply-text' && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendReply(); }
+    if (e.target.id !== 'reply-text' || e.key !== 'Enter' || e.shiftKey) return;
+    if (e.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    sendReply();
   });
   const archiveAllDone = async () => {
     const ids = [...state.sessionsById.values()].filter(s => s.status === 'done').map(s => s.id);
