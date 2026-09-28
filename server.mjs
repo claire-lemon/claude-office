@@ -14,6 +14,7 @@ const PORT = Number(process.env.OFFICE_PORT || 7777);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, process.env.OFFICE_PUBLIC || 'public');
 const ORIGINS = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`];
+const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
 // The summarizer is a plain one-shot model call, not an agent: no tools, no saved session, no hooks
@@ -141,6 +142,9 @@ const routes = {
 const server = http.createServer((req, res) => {
     try {
         const url = new URL(req.url, ORIGINS[0]);
+        // DNS rebinding: a hostile page can make the browser send any request here under its own hostname.
+        // Only answer our own Host, for GETs too (they expose transcripts and diffs).
+        if (!HOSTS.includes(req.headers.host)) return send(res, 403, { error: 'bad host' });
         if (req.method === 'POST' && !ORIGINS.includes(req.headers.origin)) return send(res, 403, { error: 'bad origin' });
         const [, , name, id = ''] = url.pathname.split('/');
         const route = url.pathname.startsWith('/api/') && routes[`${req.method} /api/${name}`];

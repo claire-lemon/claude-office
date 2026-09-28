@@ -227,3 +227,51 @@ test('hook does nothing when OFFICE_SKIP_HOOK is set', () => {
     assert.equal(r.status, 0);
     assert.ok(!fs.existsSync(path.join(HOME, '.claude/office/state', 'skipme.json')));
 });
+
+test('lastAssistantText finds a last reply bigger than the tail window', () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'office-big-')), 't.jsonl');
+    const line = text => `${JSON.stringify({ type: 'assistant', isSidechain: false, message: { role: 'assistant', content: [{ type: 'text', text }] } })}\n`;
+    const big = `## 결재 보고\n### 한 줄 요약\n1. 큰 보고 완료\n${'x'.repeat(300 * 1024)}`;
+    fs.writeFileSync(file, line('## 결재 보고\n### 한 줄 요약\n1. 예전 보고') + line(big));
+    const text = lib.lastAssistantText(file);
+    assert.equal(text.length, big.length);
+    assert.equal(lib.parseReport(text)['한 줄 요약'].split('\n')[0], '1. 큰 보고 완료');
+});
+
+test('held sessions keep a desk even when 10 fresher sessions exist', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'office-hold-'));
+    const stateDir = path.join(home, '.claude/office/state');
+    fs.mkdirSync(stateDir, { recursive: true });
+    const now = Date.now();
+    const put = (id, at) => fs.writeFileSync(path.join(stateDir, `${id}.json`), JSON.stringify({ event: 'Stop', at }));
+    put('old-held', now - 40 * 3600 * 1000);
+    Array.from({ length: 10 }, (_, i) => put(`fresh-${i}`, now - i * 1000));
+    fs.writeFileSync(path.join(home, '.claude/office/decisions.json'), JSON.stringify({ 'old-held': { kind: 'hold', at: now - 39 * 3600 * 1000 } }));
+    const out = execFileSync('node', ['-e', "import('./lib.mjs').then(l => console.log(JSON.stringify(l.buildSessions().map(s => [s.id, s.status]))))"], {
+        cwd: ROOT,
+        env: { ...process.env, OFFICE_HOME: home, OFFICE_APP_DIR: path.join(home, 'none') },
+    });
+    const rows = JSON.parse(out.toString());
+    assert.equal(rows.length, 10);
+    assert.deepEqual(rows.find(r => r[0] === 'old-held'), ['old-held', 'hold']);
+});
+
+test('server rejects foreign Host headers on GET (DNS rebinding)', async () => {
+    const { spawn } = await import('node:child_process');
+    const http = await import('node:http');
+    const port = '7795';
+    const server = spawn('node', [path.join(ROOT, 'server.mjs')], { env: { ...env, OFFICE_DRY: '1', OFFICE_PORT: port } });
+    await new Promise(r => server.stdout.once('data', r));
+    const status = host =>
+        new Promise((resolve, reject) =>
+            http.get({ host: '127.0.0.1', port, path: '/api/sessions', headers: { host } }, res => (res.resume(), resolve(res.statusCode))).on('error', reject),
+        );
+    try {
+        assert.equal(await status(`127.0.0.1:${port}`), 200);
+        assert.equal(await status(`localhost:${port}`), 200);
+        assert.equal(await status('evil.example'), 403);
+        assert.equal(await status(`evil.example:${port}`), 403);
+    } finally {
+        server.kill();
+    }
+});
