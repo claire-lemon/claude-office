@@ -98,6 +98,9 @@ const AUTO_SEND_SCRIPT = `on run argv
             if (name of first application process whose frontmost is true) is "Claude" then
                 try
                     set seen to name of front window of process "Claude"
+                on error errMsg number errNum
+                    -- reading window titles needs Accessibility; surface that instead of timing out as a mismatch
+                    if errNum is -25211 or errNum is -1719 or errMsg contains "보조 접근" or errMsg contains "assistive" then error errMsg number errNum
                 end try
                 if seen contains wanted then
                     delay 0.3
