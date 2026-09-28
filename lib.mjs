@@ -254,9 +254,10 @@ export const buildSessions = (now = Date.now()) => {
             const lastText = transcript ? lastAssistantText(transcript) : '';
             const report = parseReport(lastText);
             const id = app?.sessionId || cli;
-            const summary = fs.existsSync(path.join(SUMMARY_DIR, `${id}.md`))
-                ? fs.readFileSync(path.join(SUMMARY_DIR, `${id}.md`), 'utf8')
-                : null;
+            // A summary describes the turn it was made for; once the session moves on it is stale.
+            const summaryFile = path.join(SUMMARY_DIR, `${id}.md`);
+            const summaryAt = fs.existsSync(summaryFile) ? fs.statSync(summaryFile).mtimeMs : 0;
+            const summary = summaryAt && summaryAt >= (state?.at || 0) ? fs.readFileSync(summaryFile, 'utf8') : null;
             const status = deriveStatus({ state, hasReport: !!report, decision: decisions[id] });
             const gi = cwd && fs.existsSync(cwd) ? gitInfo(cwd) : { project: null, branch: null };
             return {

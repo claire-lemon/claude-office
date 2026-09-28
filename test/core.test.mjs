@@ -296,3 +296,16 @@ test('reply: copies the text and opens the chat; rejects empty, oversized, forei
         server.kill();
     }
 });
+
+test('a summary is hidden once the session has a newer event', () => {
+    const dir = path.join(HOME, '.claude/office/summaries');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'local_4.md');
+    fs.writeFileSync(file, '## 결재 보고\n### 한 줄 요약\n1. 예전 요약');
+    const old = new Date(Date.now() - 60 * 60 * 1000);
+    fs.utimesSync(file, old, old);
+    assert.equal(lib.buildSessions().find(s => s.id === 'local_4').summary, null);
+    const future = new Date(Date.now() + 60 * 1000);
+    fs.utimesSync(file, future, future);
+    assert.match(lib.buildSessions().find(s => s.id === 'local_4').summary, /예전 요약/);
+});
