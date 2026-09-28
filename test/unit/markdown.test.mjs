@@ -46,3 +46,51 @@ test('report style: numbered items with 3-space nested numbered children', () =>
     const out = md('1. `a.ts:1` 수정\n2. 검증 완료\n   1. 단위 테스트로 검증\n   2. 로컬 API 처리\n3. 없음');
     assert.equal(out, '<ol><li><code>a.ts:1</code> 수정</li><li>검증 완료<ol><li>단위 테스트로 검증</li><li>로컬 API 처리</li></ol></li><li>없음</li></ol>');
 });
+
+test('frontmatter: note-header YAML becomes a key/value table, body renders below', async () => {
+    const { splitFrontmatter, renderDocument } = await import('../../public/js/lib/markdown.js');
+    const doc = [
+        '---',
+        'type: query-output',
+        'created: "2026-09-28"',
+        "question: 'A <b>long</b> question?'",
+        'sources:',
+        '  - "[[notes/plan|Plan v3]] — the template"',
+        '  - "[[notes/raw]]"',
+        'pr:',
+        'tags: [consulting, serverless]',
+        'summary: |',
+        '  first line',
+        '  second line',
+        '---',
+        '',
+        '# Title',
+    ].join('\n');
+    const { meta, body } = splitFrontmatter(doc);
+    assert.deepEqual(meta, [
+        { key: 'type', value: 'query-output' },
+        { key: 'created', value: '2026-09-28' },
+        { key: 'question', value: 'A <b>long</b> question?' },
+        { key: 'sources', value: ['[[notes/plan|Plan v3]] — the template', '[[notes/raw]]'] },
+        { key: 'pr', value: '' },
+        { key: 'tags', value: ['consulting', 'serverless'] },
+        { key: 'summary', value: 'first line second line' },
+    ]);
+    assert.equal(body, '\n# Title');
+    const out = renderDocument(doc);
+    assert.match(out, /^<div class="md-table md-frontmatter"><table><tbody><tr><th>type<\/th><td>query-output<\/td><\/tr>/);
+    assert.match(out, /<th>question<\/th><td>A &lt;b&gt;long&lt;\/b&gt; question\?<\/td>/); // escaped, never HTML
+    assert.match(out, /<th>sources<\/th><td><ul><li>Plan v3 — the template<\/li><li>notes\/raw<\/li><\/ul><\/td>/); // wiki links -> labels
+    assert.match(out, /<th>pr<\/th><td><span class="md-fm-empty">-<\/span><\/td>/);
+    assert.match(out, /<\/table><\/div><h3>Title<\/h3>$/);
+});
+
+test('frontmatter: a leading --- rule or an unclosed block is left to the markdown renderer', async () => {
+    const { splitFrontmatter, renderDocument } = await import('../../public/js/lib/markdown.js');
+    const rule = '---\nJust a paragraph after a rule.\n---\nmore';
+    assert.equal(splitFrontmatter(rule).meta, null);
+    assert.equal(renderDocument(rule), md(rule));
+    assert.equal(splitFrontmatter('---\ntype: note\nno closing line').meta, null);
+    assert.equal(splitFrontmatter('# no frontmatter').meta, null);
+    assert.equal(splitFrontmatter('---\n---\nbody').meta, null);
+});

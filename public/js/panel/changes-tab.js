@@ -1,7 +1,7 @@
 // Changes tab: renders ChangesView (src/usecases/get-changes.mjs) and refetches it whenever the
 // selected session gets a newer event, instead of caching the diff forever.
 import { $, $$, escapeHtml } from '../lib/dom.js';
-import { renderMarkdown } from '../lib/markdown.js';
+import { renderDocument } from '../lib/markdown.js';
 import * as api from '../api.js';
 import { state, selected, diffCache, activeTabState } from '../store.js';
 
@@ -38,7 +38,7 @@ const fileBody = (f, raw) => {
       <button type="button" class="seg-btn${raw ? '' : ' active'}" data-view="preview">미리보기</button>
       <button type="button" class="seg-btn${raw ? ' active' : ''}" data-view="raw">원문</button>
     </div>
-    <div class="file-view-pane${raw ? ' hidden' : ''}" data-view-pane="preview"><div class="report-sec">${renderMarkdown(addedFileText(f.patch))}</div></div>
+    <div class="file-view-pane${raw ? ' hidden' : ''}" data-view-pane="preview"><div class="report-sec">${renderDocument(addedFileText(f.patch))}</div></div>
     <div class="file-view-pane${raw ? '' : ' hidden'}" data-view-pane="raw"><pre class="patch">${patchLines(f.patch)}</pre></div>`;
 };
 
