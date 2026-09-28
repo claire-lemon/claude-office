@@ -55,10 +55,10 @@
   body.panel-open .panel-backdrop{opacity:1; pointer-events:auto;}
   @media (min-width:1400px){ .panel-backdrop{display:none;} }
 
-  .office{background:var(--bg-panel); border:1px solid var(--line); border-radius:16px; padding:14px; position:relative;}
-  .office-decor{display:flex; gap:10px; margin-bottom:10px;}
+  .office{background:var(--bg-panel); border:1px solid var(--line); border-radius:16px; padding:12px; position:relative; display:flex; gap:12px; align-items:flex-start; margin-bottom:12px;}
+  .office-decor{display:flex; flex-direction:column; align-items:center; gap:8px; flex:none;}
   .decor{display:block;}
-  .window{width:120px; height:78px;}
+  .window{width:64px; height:42px;}
   .window .frame{fill:var(--desk-edge);}
   .window .sky{fill:var(--sky-day);}
   .window.night .sky{fill:var(--sky-night);}
@@ -66,9 +66,13 @@
   .window.night .sun{display:none;}
   .window.night .moon,.window.night .star{display:block;}
   .window .mullion{stroke:var(--desk-edge); stroke-width:2;}
-  .plant{width:60px; height:78px;}
+  .plant{width:28px; height:42px;}
 
-  .desks{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); grid-template-rows:repeat(2,1fr); gap:10px;}
+  /* ponytail: desks capped at 104px so 2 rows stay ~330px tall; the approval board is the main view */
+  .desks{flex:1; min-width:0; display:grid; grid-template-columns:repeat(5,minmax(0,104px)); justify-content:center; gap:8px;}
+  @media (min-width:1280px){ .desks{grid-template-columns:repeat(10,minmax(0,104px));} }
+  /* phones: no decor column, bubbles shrink to their icon so they don't cover the animals */
+  @media (max-width:640px){ .office-decor{display:none;} .bubble .b-text,.bubble .b-paper{display:none;} }
   .desk{position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:6px 6px 8px; display:flex; flex-direction:column; align-items:center; min-width:0;}
   .desk.occupied{cursor:pointer;}
   .desk.occupied:hover{box-shadow:var(--shadow); transform:translateY(-1px);}
@@ -86,7 +90,6 @@
   .bubble-danger .b-text{color:var(--bad); font-weight:700;}
   .b-icon{position:relative; display:inline-block;}
   .b-paper{margin-left:1px;}
-  .above-head{position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-weight:800; font-size:14px; color:var(--warn); animation:bounce-q 1s ease-in-out infinite;}
   .steam{position:absolute; top:-4px; width:2px; height:6px; background:var(--muted); border-radius:2px; opacity:.6;}
   .steam.s1{left:2px; animation:steam-rise 1.6s ease-out infinite;}
   .steam.s2{left:8px; animation:steam-rise 1.6s ease-out infinite .5s;}
@@ -104,7 +107,6 @@
   @keyframes wave-arm{0%,100%{transform:rotate(0deg)} 50%{transform:rotate(-20deg)}}
   @keyframes code-scroll{0%,100%{opacity:.55} 50%{opacity:1}}
   @keyframes steam-rise{0%{transform:translateY(0); opacity:.6} 100%{transform:translateY(-9px); opacity:0}}
-  @keyframes bounce-q{0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-4px)}}
   @keyframes stamp-bang{0%{transform:scale(3) rotate(-12deg); opacity:0} 35%{transform:scale(1) rotate(-8deg); opacity:1} 75%{transform:scale(1) rotate(-8deg); opacity:1} 100%{opacity:0}}
 
   .kanban{background:var(--bg-panel); border:1px solid var(--line); border-radius:16px; padding:14px; min-width:0;}
@@ -374,7 +376,7 @@
   const BUBBLE_HTML = {
     working: '<div class="bubble"><span class="b-icon">⌨️</span><span class="b-text">타닥타닥</span></div>',
     review: '<div class="bubble"><span class="b-icon anim-wave-emoji">🖐️</span><span class="b-text">보고드려요</span><span class="b-paper">📄</span></div>',
-    question: '<div class="above-head">?</div>',
+    question: '<div class="bubble"><span class="b-icon">❓</span><span class="b-text">질문 있어요</span></div>',
     blocked: '<div class="bubble bubble-danger"><span class="b-icon">💦</span><span class="b-text">도와주세요</span></div>',
     done: '<div class="bubble"><span class="b-icon">☕<span class="steam s1"></span><span class="steam s2"></span></span><span class="b-text">완료</span></div>',
     unknown: '',
