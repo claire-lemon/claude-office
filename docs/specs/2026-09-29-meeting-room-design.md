@@ -84,7 +84,7 @@ type: office-daily
   - `meetingSection({ n, startedAt, endedAt, todos, lastMessage })`, `appendSection(text, section)`.
   - `noteSkeleton(date)`: frontmatter + `# date`.
 - `sources/daily-notes.mjs`: `pathFor(date)`, `read(date) -> string|null`, `write(date, text)`(원자적, `DAILY_DIR` 생성).
-- 3조각은 자동 구간 뒤에 AI 서술 섹션을 넣고 주기적으로 실행한다.
+- 3조각은 자동 구간 뒤에 AI 서술 섹션을 넣고 주기적으로 실행한다 → `2026-09-29-daily-narrative-design.md` (구현 완료).
 
 ## 5. API (추가만)
 

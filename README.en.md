@@ -159,10 +159,12 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
    node bin/office.mjs todo update <id> [--title …] [--detail …] [--folder …] [--done true|false]
    node bin/office.mjs todo delete <id>
    node bin/office.mjs folders
+   node bin/office.mjs narrate      # rewrite today's AI narrative now
    ```
    Items added in a meeting carry a 🏫 mark on the blackboard. The meeting screen refreshes the facilitator's latest message and the blackboard every 2 seconds.
 4. **회의 끝** (end): archives the facilitator session and appends a `## 회의 n` section (the agreed todos, the facilitator's last message) to the note. You can hold several meetings a day. Only the note's auto block (`<!-- office:auto:start -->` … `end -->`) is regenerated at each start; everything else is kept.
-5. The app may ask for Bash permission each time the facilitator runs the CLI. To stop that, allow just that command in `~/.claude/office/.claude/settings.json` (this app never writes it).
+5. **AI narrative**: while the server runs, once a day after 05:00 a model (`claude -p`, haiku) tells yesterday's sessions as a story per project plus a "남은 것" (still open) list, and puts it in a `## 어제 이야기` block (`<!-- office:narrative:start -->` … `end -->`) right after the auto block. The server checks at start and every 10 minutes and skips a note that already has one. To rewrite it: `node bin/office.mjs narrate`. The facilitator reads the note, so it sees the narrative too.
+6. The app may ask for Bash permission each time the facilitator runs the CLI. To stop that, allow just that command in `~/.claude/office/.claude/settings.json` (this app never writes it).
 
 ## Detail panel
 
@@ -215,6 +217,7 @@ node scripts/metrics.mjs
 - No deep link that fills an existing chat's input box was found in the app, so confirm goes through the clipboard (⌘V, Enter). New sessions use the `claude://code/new?q=…` deep link, which fills the input box without sending it.
 - You talk to the meeting facilitator in the app's chat; the meeting screen shows only its latest message.
 - Meetings and notes use the server's local date. A meeting that crosses midnight is no longer found as "today's".
+- The AI narrative runs on a timer inside the server, so nothing is written while the server is off (it checks as soon as it starts). To run it without the server, put `node bin/office.mjs narrate` in cron/launchd. The narrative is a model summary and can be wrong (for example, blending two sessions into one sentence).
 - Todo ↔ session links rely on the `#todo-…` marker in a new session's first prompt. Delete that line before sending and the session won't link (start it from the blackboard again).
 - Dragging cards needs a mouse. From the keyboard, the detail panel's hold / unhold / confirm buttons do the same.
 - The dashboard parses the Korean `## 결재 보고` heading and its sub-headings exactly as written.
