@@ -47,6 +47,7 @@ const renderPanelHeader = session => {
   const sub = $('#panel-sub');
   sub.textContent = `${ANIMAL_LABELS[safeAnimal(session.animal)]} · ${session.branch || '-'} · PR ${prLabel} · ${session.turns ?? '-'}턴`;
   if (session.todoId) sub.append(' · ', Object.assign(document.createElement('span'), { className: 'todo-tag', textContent: `📋 ${todoTitle(session.todoId)}` }));
+  if (session.meetingId) sub.append(' · ', Object.assign(document.createElement('span'), { className: 'todo-tag', textContent: '🏫 회의' }));
   const loc = $('#panel-loc');
   loc.replaceChildren(...[
     ['📁 프로젝트', session.projectPath],

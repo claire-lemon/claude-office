@@ -70,7 +70,7 @@ const buildCard = session => {
   card.className = 'kan-card';
   card.dataset.id = session.id;
   card.draggable = true; // views/board-dnd.js
-  card.innerHTML = `<div class="kan-top"><span class="kan-avatar"><svg viewBox="0 0 24 34"><use href="#animal-${safeAnimal(session.animal)}"/></svg></span><span class="kan-title"></span><span class="kan-tag hidden"></span></div><div class="kan-todo hidden"><span class="todo-tag"></span></div><div class="kan-loc"><div class="loc-proj"></div><div class="loc-branch"></div><div class="loc-cwd"></div></div><div class="kan-meta"></div><div class="kan-diffstat hidden"></div>`;
+  card.innerHTML = `<div class="kan-top"><span class="kan-avatar"><svg viewBox="0 0 24 34"><use href="#animal-${safeAnimal(session.animal)}"/></svg></span><span class="kan-title"></span><span class="kan-tag hidden"></span></div><div class="kan-todo hidden"><span class="todo-tag"></span><span class="todo-tag kan-meeting">🏫 회의</span></div><div class="kan-loc"><div class="loc-proj"></div><div class="loc-branch"></div><div class="loc-cwd"></div></div><div class="kan-meta"></div><div class="kan-diffstat hidden"></div>`;
   return card;
 };
 const updateCard = (card, session) => {
@@ -82,8 +82,10 @@ const updateCard = (card, session) => {
   tag.classList.toggle('tag-danger', session.status === 'blocked');
   tag.classList.toggle('hidden', !tagText);
   const todoEl = card.querySelector('.kan-todo');
-  todoEl.classList.toggle('hidden', !session.todoId);
+  todoEl.classList.toggle('hidden', !session.todoId && !session.meetingId);
+  todoEl.firstChild.classList.toggle('hidden', !session.todoId);
   if (session.todoId) todoEl.firstChild.textContent = `📋 ${todoTitle(session.todoId)}`;
+  todoEl.lastChild.classList.toggle('hidden', !session.meetingId); // 🏫 facilitator (views/meeting.js)
   const proj = card.querySelector('.loc-proj');
   proj.textContent = `📁 ${session.repo || '-'}`;
   proj.title = session.projectPath || '';

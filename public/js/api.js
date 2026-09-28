@@ -24,3 +24,7 @@ export const postTodo = body => fetch('/api/todos', jsonInit('POST', body));
 export const patchTodo = (id, body) => fetch(`/api/todos/${encodeURIComponent(id)}`, jsonInit('POST', body));
 export const deleteTodo = id => fetch(`/api/todos/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const postStart = id => fetch(`/api/start/${encodeURIComponent(id)}`, { method: 'POST' });
+// 회의실 (docs/specs/2026-09-29-meeting-room-design.md §5).
+export const getMeeting = () => fetch('/api/meeting', { cache: 'no-store' });
+export const postMeetingStart = () => fetch('/api/meeting/start', { method: 'POST' });
+export const postMeetingEnd = () => fetch('/api/meeting/end', { method: 'POST' });

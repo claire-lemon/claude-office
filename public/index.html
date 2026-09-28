@@ -11,11 +11,13 @@
 <link rel="stylesheet" href="css/markdown.css">
 <link rel="stylesheet" href="css/changes.css">
 <link rel="stylesheet" href="css/blackboard.css">
+<link rel="stylesheet" href="css/meeting.css">
 </head>
 <body>
 <header class="topbar">
   <h1>오늘의 사무실</h1>
   <div class="counters" role="group" aria-label="필터"></div><!-- buttons from views/filters.js FILTERS -->
+  <button id="meeting-open" class="icon-btn meeting-btn" type="button" aria-pressed="false" title="회의실">🏫 회의실</button>
   <button id="archive-open" class="icon-btn archive-btn" type="button" title="보관함" data-drop="archive">🗄️ 보관함</button>
   <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" title="알림 소리">🔔</button>
 </header>
@@ -46,6 +48,7 @@
         </svg>
       </div>
       <div class="desks" id="desks"></div>
+      <section class="meeting" id="meeting" aria-label="회의실" hidden></section><!-- views/meeting.js -->
     </section>
     <div class="split-y" id="split-office"></div>
     <section class="kanban" aria-label="결재함">

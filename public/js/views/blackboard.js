@@ -66,7 +66,7 @@ const itemHtml = t => {
   const memoOpen = ui.memo.has(t.id);
   return `<div class="bb-row">
       <input type="checkbox" class="bb-check" data-act="toggle"${done ? ' checked' : ''}>
-      <span class="bb-name" data-act="title" role="button" tabindex="0" title="클릭해서 제목 바꾸기"></span>
+      ${t.source === 'scrum' ? '<span class="bb-scrum" title="회의실에서 추가">🏫</span>' : ''}<span class="bb-name" data-act="title" role="button" tabindex="0" title="클릭해서 제목 바꾸기"></span>
       <button type="button" class="bb-icon bb-memo" data-act="edit-detail" aria-expanded="${memoOpen}">메모</button>
       <button type="button" class="bb-icon bb-del" data-act="delete" aria-label="삭제" title="삭제">🗑</button>
     </div>
