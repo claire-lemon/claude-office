@@ -1,9 +1,10 @@
 import { $ } from '../lib/dom.js';
 import { safeAnimal, ANIMAL_LABELS } from '../views/sprites.js';
 import { state, selected, activeTabState, controls } from '../store.js';
-import { renderPanelActions } from './footer.js';
+import { renderPanelActions, closeFooterMenus } from './footer.js';
 import { renderReportPane } from './report-tab.js';
 import { setTab } from './changes-tab.js';
+import { mountResize } from './resize.js';
 
 export { setTab } from './changes-tab.js';
 
@@ -45,13 +46,14 @@ const renderPanelHeader = session => {
 };
 
 const openPanel = () => { $('#panel').classList.add('open'); $('#panel').setAttribute('aria-hidden','false'); document.body.classList.add('panel-open'); };
-const closePanel = () => { selected.id = null; $('#panel').classList.remove('open'); $('#panel').setAttribute('aria-hidden','true'); document.body.classList.remove('panel-open'); };
+const closePanel = () => { closeFooterMenus(); selected.id = null; $('#panel').classList.remove('open'); $('#panel').setAttribute('aria-hidden','true'); document.body.classList.remove('panel-open'); };
 controls.closePanel = closePanel;
 export { closePanel };
 
 const renderPanelFull = () => {
   const session = state.sessionsById.get(selected.id);
   if (!session) { closePanel(); return; }
+  closeFooterMenus(); // switching sessions must not leave the previous session's menu open
   renderPanelHeader(session);
   renderPanelActions(session);
   renderReportPane(session);
@@ -73,3 +75,5 @@ export const selectSession = id => {
   openPanel();
   renderPanelFull();
 };
+
+mountResize($('#panel'), {}); // once, at module load

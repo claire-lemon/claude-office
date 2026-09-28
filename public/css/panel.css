@@ -5,7 +5,7 @@
 
   @keyframes stamp-bang{0%{transform:scale(3) rotate(-12deg); opacity:0} 35%{transform:scale(1) rotate(-8deg); opacity:1} 75%{transform:scale(1) rotate(-8deg); opacity:1} 100%{opacity:0}}
 
-  .panel{position:fixed; top:0; right:0; height:100vh; width:380px; max-width:92vw; background:var(--bg-panel);
+  .panel{position:fixed; top:0; right:0; height:100vh; width:var(--panel-w, 380px); max-width:92vw; background:var(--bg-panel);
     border-left:1px solid var(--line); box-shadow:var(--shadow); transform:translateX(100%); transition:transform .2s ease;
     display:flex; flex-direction:column; z-index:20;}
   .panel.open{transform:translateX(0);}
@@ -68,3 +68,36 @@
   .stamp-layer{position:fixed; inset:0; z-index:5; display:flex; align-items:center; justify-content:center; pointer-events:none;}
   .stamp-fx{font-size:48px; font-weight:900; color:var(--bad); border:6px solid var(--bad); border-radius:12px; padding:4px 16px;
     transform:rotate(-8deg); animation:stamp-bang .9s ease-out forwards;}
+
+  /* ---- resize handle (panel/resize.js) ---- */
+  body.panel-resizing{user-select:none; cursor:ew-resize;}
+  .panel-resize-handle{position:absolute; top:0; left:-3px; width:6px; height:100%; z-index:2; cursor:ew-resize; background:transparent; transition:background-color .15s ease;}
+  .panel-resize-handle:hover, .panel-resize-handle:focus-visible{background:var(--accent); transition-delay:.3s; outline:none;}
+  .panel-resize-handle::after{content:'크기 조정'; position:absolute; top:50%; left:-8px; transform:translate(-100%,-50%); background:var(--ink); color:var(--bg-panel);
+    font-size:11px; line-height:1; padding:4px 7px; border-radius:6px; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .15s ease;}
+  .panel-resize-handle:hover::after, .panel-resize-handle:focus-visible::after{opacity:1; transition-delay:.3s;}
+
+  /* ---- footer: split primary + overflow menu (panel/footer.js, panel/actions.js) ---- */
+  .act-split{position:relative; display:inline-flex;}
+  .act-split .act-primary{border-top-right-radius:0; border-bottom-right-radius:0;}
+  .act-split-toggle{border-top-left-radius:0; border-bottom-left-radius:0; border-left:1px solid rgba(255,255,255,.35);}
+  .act-menu-toggle{background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:8px; padding:7px 8px; font-size:11px; line-height:1;}
+  .act-overflow .act-menu-toggle{background:var(--card); color:var(--ink); border-color:var(--line); border-radius:8px; padding:7px 10px;}
+  .act-overflow{position:relative; display:inline-flex; margin-left:auto;}
+  .act-menu{position:absolute; bottom:calc(100% + 6px); min-width:180px; background:var(--bg-panel); border:1px solid var(--line); border-radius:10px;
+    box-shadow:var(--shadow); padding:4px; display:flex; flex-direction:column; gap:1px; z-index:25;}
+  .act-split .act-menu{left:0;}
+  .act-menu-right{right:0;}
+  .act-menu.hidden{display:none;}
+  .act-menu .act-menu-item{background:none; border:none; border-radius:6px; text-align:left; padding:7px 8px; font-size:12px; width:100%;}
+  .act-menu .act-menu-item:hover, .act-menu .act-menu-item:focus-visible{background:var(--card); outline:none;}
+  .act-menu .act-menu-item:disabled{opacity:.6; cursor:default;}
+  .act-menu-item.act-menu-danger{color:var(--bad);}
+  .act-menu-sep{border:none; border-top:1px solid var(--line); margin:3px 2px;}
+
+  /* ---- report tab: 다음 작업 항목별 ▶ 진행 (panel/report-tab.js) ---- */
+  .task-list{list-style:decimal;}
+  .task-item-row{display:flex; align-items:center; gap:8px;}
+  .task-item-text{flex:1; min-width:0;}
+  .task-next-btn{flex:none; font-size:11px; padding:3px 8px;}
+  .task-item-detail{margin-top:2px; color:var(--muted);}
