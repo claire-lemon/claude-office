@@ -202,9 +202,6 @@
   .untracked ul{margin:4px 0 0; padding-left:18px; font-size:12px;}
   .panel-actions{display:flex; flex-wrap:wrap; gap:6px; padding:10px 16px 16px; border-top:1px solid var(--line);}
   .act-btn.act-primary{background:var(--accent); color:#fff; border-color:var(--accent);}
-  .reply-box{display:flex; gap:6px; align-items:flex-end; padding:10px 16px 0; border-top:1px solid var(--line);}
-  .reply-box textarea{flex:1; min-width:0; resize:vertical; min-height:38px; max-height:200px; font:inherit; font-size:13px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink);}
-  .reply-box.hidden{display:none;}
   .toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:30; background:var(--ink); color:var(--bg-panel); padding:10px 16px; border-radius:12px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.18); max-width:90vw;}
   .act-btn{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px;}
   .act-btn:disabled{opacity:.6; cursor:default;}
@@ -279,10 +276,6 @@
     <div class="stamp-layer" id="stamp-layer"></div>
     <div class="tab-pane" id="pane-report"></div>
     <div class="tab-pane hidden" id="pane-diff"></div>
-  </div>
-  <div class="reply-box hidden" id="reply-box">
-    <textarea id="reply-text" rows="2" placeholder="답장을 입력하세요 · ⌘Enter로 보내기" aria-label="세션에 보낼 답장"></textarea>
-    <button type="button" class="act-btn" id="reply-send">답장 보내기</button>
   </div>
   <div class="panel-actions" id="panel-actions"></div>
 </aside>
@@ -765,7 +758,6 @@
     return b;
   };
   const renderPanelActions = session => {
-    $('#reply-box').classList.toggle('hidden', !session.link);
     const el = $('#panel-actions');
     el.innerHTML = '';
     if (session.link) el.appendChild(actionBtn('채팅방 열기','open'));
@@ -870,7 +862,6 @@
   const selectSession = id => {
     if (selected.id === id) { closePanel(); return; }
     selected.id = id;
-    $('#reply-text').value = '';
     openPanel();
     renderPanelFull();
   };
@@ -951,22 +942,6 @@
     try { renderArchive((await fetch('/api/archived').then(r => r.json())).archived || []); }
     catch { $('#archive-body').innerHTML = '<p class="hint">보관함을 불러오지 못했어요.</p>'; }
   };
-  // The app won't prefill an existing chat from a link, so the reply goes to the clipboard and the chat opens.
-  const sendReply = async () => {
-    const id = selected.id;
-    const box = $('#reply-text');
-    const text = box.value.trim();
-    if (!id || !text) { box.focus(); return; }
-    try {
-      const res = await fetch(`/api/reply/${encodeURIComponent(id)}`, { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ text }) });
-      if (!res.ok) { flashPanelError(res.status === 413 ? '답장이 너무 길어요' : '답장을 보내지 못했어요'); return; }
-      box.value = '';
-      flashPanelError('답장 복사됨 · 채팅방에서 ⌘V → Enter', 6000);
-    } catch { flashPanelError('답장을 보내지 못했어요'); }
-  };
-  document.addEventListener('keydown', e => {
-    if (e.target.id === 'reply-text' && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendReply(); }
-  });
   const archiveAllDone = async () => {
     const ids = [...state.sessionsById.values()].filter(s => s.status === 'done').map(s => s.id);
     const results = await Promise.all(ids.map(id => fetch(`/api/archive/${encodeURIComponent(id)}`, { method:'POST' }).then(r => r.ok).catch(() => false)));
@@ -996,7 +971,6 @@
   document.addEventListener('click', e => {
     if (e.target.closest('#archive-open')) { openArchive(); return; }
     if (e.target.closest('#archive-done')) { archiveAllDone(); return; }
-    if (e.target.closest('#reply-send')) { sendReply(); return; }
     if (e.target.closest('#archive-close')) { $('#archive-dialog').close(); return; }
     if (e.target.id === 'archive-dialog') { $('#archive-dialog').close(); return; } // backdrop click
     const restoreBtn = e.target.closest('.restore-btn');

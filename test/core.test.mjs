@@ -276,27 +276,6 @@ test('server rejects foreign Host headers on GET (DNS rebinding)', async () => {
     }
 });
 
-test('reply: copies the text and opens the chat; rejects empty, oversized, foreign origin', async () => {
-    const { spawn } = await import('node:child_process');
-    const port = '7794';
-    const server = spawn('node', [path.join(ROOT, 'server.mjs')], { env: { ...env, OFFICE_DRY: '1', OFFICE_PORT: port } });
-    await new Promise(r => server.stdout.once('data', r));
-    const origin = `http://127.0.0.1:${port}`;
-    const reply = (text, from = origin) =>
-        fetch(`${origin}/api/reply/local_2`, { method: 'POST', headers: { origin: from, 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
-    try {
-        const ok = await reply('  main 기준으로 해줘  ').then(r => r.json());
-        assert.equal(ok.copied, 'main 기준으로 해줘');
-        assert.equal(ok.opened, 'claude://claude.ai/epitaxy/local_2');
-        assert.equal((await reply('   ')).status, 400);
-        assert.equal((await reply('x'.repeat(20001))).status, 413);
-        assert.equal((await reply('hi', 'http://evil.example')).status, 403);
-        assert.equal((await fetch(`${origin}/api/reply/nope`, { method: 'POST', headers: { origin }, body: '{"text":"a"}' })).status, 404);
-    } finally {
-        server.kill();
-    }
-});
-
 test('a summary is hidden once the session has a newer event', () => {
     const dir = path.join(HOME, '.claude/office/summaries');
     fs.mkdirSync(dir, { recursive: true });

@@ -44,29 +44,6 @@ const send = (res, code, body, type = 'application/json; charset=utf-8') => {
 };
 
 const findSession = id => buildSessions().find(s => s.id === id);
-
-const REPLY_LIMIT = 20000;
-const BODY_LIMIT = 64 * 1024;
-const readJsonBody = req =>
-    new Promise((resolve, reject) => {
-        const chunks = [];
-        const size = { n: 0 };
-        req.on('data', c => {
-            size.n += c.length;
-            if (size.n > BODY_LIMIT) {
-                reject(new Error('body too large'));
-                req.destroy();
-            } else chunks.push(c);
-        });
-        req.on('end', () => {
-            try {
-                resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'));
-            } catch (e) {
-                reject(e);
-            }
-        });
-        req.on('error', reject);
-    });
 const markConfirmed = id => saveDecision(id, { kind: 'confirm', at: Date.now() });
 
 // OFFICE_DRY=1 (tests): report what would happen without touching the clipboard or the Claude app.
@@ -94,19 +71,6 @@ const routes = {
         copyText(CONFIRM_INSTRUCTION);
         if (s.link?.startsWith('claude://')) openLink(s.link);
         return send(res, 200, { ok: true, copied: CONFIRM_INSTRUCTION, opened: s.link || null });
-    },
-    // Reply = hand a typed answer to an existing chat. The app refuses ?q= prefill for existing chats
-    // (it blanks q/prompt on claude.ai links; only code/new reads it), so: clipboard + open chat, user ⌘V, Enter.
-    'POST /api/reply': async (req, res, id) => {
-        const s = findSession(id);
-        if (!s) return send(res, 404, { error: 'unknown session' });
-        const body = await readJsonBody(req).catch(() => null);
-        const text = typeof body?.text === 'string' ? body.text.trim() : '';
-        if (!text) return send(res, 400, { error: 'empty reply' });
-        if (text.length > REPLY_LIMIT) return send(res, 413, { error: 'reply too long' });
-        copyText(text);
-        if (s.link?.startsWith('claude://')) openLink(s.link);
-        return send(res, 200, { ok: true, copied: text, opened: s.link || null });
     },
     // OK = start the recommended next task in a NEW session, prompt prefilled (user presses Enter).
     'POST /api/next': (req, res, id, url) => {
