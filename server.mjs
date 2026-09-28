@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import {
     buildSessions, diffFor, lastAssistantText, SUMMARY_DIR, CONFIRM_INSTRUCTION, nextTaskPrompt, newSessionLink,
-    saveDecision, clearDecision, loadDecisions, listArchived, oneLineSummary,
+    saveDecision, clearDecision, loadDecisions, listArchived, oneLineSummary, loadAppSessions,
 } from './lib.mjs';
 
 const PORT = Number(process.env.OFFICE_PORT || 7777);
@@ -84,57 +84,80 @@ const copyText = text =>
               child.stdin.end(text);
           });
 
-// Direct send into an existing chat. The app refuses ?q= prefill for existing chats, so this types it:
-// wait until Claude is frontmost AND its front window title shows this session's title, then Cmd+V, Return.
-// If that can't be confirmed (no Accessibility permission, another chat still on screen), nothing is typed;
+// Direct send into an existing chat (app mode only: the macOS Accessibility grant belongs to Claude Office.app).
+// The app refuses ?q= prefill for existing chats, and its window title is always "Claude", so the check that the
+// right chat is on screen comes from the app's own session file: opening the chat bumps that session's
+// lastFocusedAt. Only then, with Claude frontmost, Cmd+V and Return are typed. Otherwise nothing is typed and
 // the text stays on the clipboard for a manual Cmd+V, Enter.
-const AUTO_SEND_SCRIPT = `on run argv
-    set wanted to item 1 of argv
-    tell application "Claude" to activate
-    delay 0.6
-    tell application "System Events"
-        set seen to ""
-        repeat 30 times
-            if (name of first application process whose frontmost is true) is "Claude" then
-                try
-                    set seen to name of front window of process "Claude"
-                on error errMsg number errNum
-                    -- reading window titles needs Accessibility; surface that instead of timing out as a mismatch
-                    if errNum is -25211 or errNum is -1719 or errMsg contains "보조 접근" or errMsg contains "assistive" then error errMsg number errNum
-                end try
-                if seen contains wanted then
-                    delay 0.3
-                    keystroke "v" using command down
-                    delay 0.15
-                    key code 36
-                    return "sent"
-                end if
-            end if
-            delay 0.1
-        end repeat
-    end tell
-    error "title-mismatch: " & seen number 9001
-end run`;
+const APP_BUNDLE_ID = 'io.github.claire-lemon.claude-office';
+const APP_MODE = process.env.__CFBundleIdentifier === APP_BUNDLE_ID || process.env.OFFICE_APP === '1';
+const PASTE_SCRIPT = `tell application "Claude" to activate
+tell application "System Events"
+    repeat 20 times
+        if (name of first application process whose frontmost is true) is "Claude" then
+            delay 0.3
+            keystroke "v" using command down
+            delay 0.15
+            key code 36
+            return "sent"
+        end if
+        delay 0.1
+    end repeat
+end tell
+error "not-frontmost" number 9002`;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+// True once the app shows this session: its lastFocusedAt moved past `since`, or (already on screen, so it
+// won't move) it is the most recently focused session.
+const chatOnScreen = async (sessionId, since) => {
+    for (const i of Array.from({ length: 15 }, (_, n) => n)) {
+        await sleep(200);
+        const apps = loadAppSessions();
+        const target = apps.find(a => a.sessionId === sessionId);
+        if (!target) return false;
+        const focused = target.lastFocusedAt || 0;
+        if (focused >= since) return true;
+        const newestOther = Math.max(0, ...apps.filter(a => a.sessionId !== sessionId).map(a => a.lastFocusedAt || 0));
+        if (i >= 3 && focused > newestOther) return true;
+    }
+    return false;
+};
 
 const deliverToChat = async (session, text) => {
     if (DRY) return { auto: false, reason: 'dry' };
+    if (!APP_MODE) {
+        await copyText(text);
+        if (session.link?.startsWith('claude://')) openLink(session.link);
+        return { auto: false, reason: 'web' };
+    }
     const previous = await run('pbpaste', [], UTF8_ENV).then(r => r.stdout).catch(() => null);
     await copyText(text);
     if (!session.link?.startsWith('claude://')) return { auto: false, reason: 'no-link' };
+    const since = Date.now();
     await run('open', [session.link]).catch(() => {});
+    if (!(await chatOnScreen(session.id, since))) return { auto: false, reason: 'mismatch' };
     try {
-        await run('osascript', ['-e', AUTO_SEND_SCRIPT, session.title], { timeout: 8000 });
+        await run('osascript', ['-e', PASTE_SCRIPT], { timeout: 8000 });
         if (previous !== null) setTimeout(() => copyText(previous), 1500); // after the paste has landed
         return { auto: true };
     } catch (e) {
-        const msg = String(e.stderr || e.message || '');
-        const reason = /-1719|-1728|-25211|보조 접근|assistive|not allowed/i.test(msg) ? 'permission' : /title-mismatch/.test(msg) ? 'mismatch' : 'failed';
-        return { auto: false, reason, detail: msg.trim().split('\n').pop().slice(0, 200) };
+        // Only osascript's own stderr counts: e.message embeds the script text.
+        const msg = String(e.stderr || '').trim();
+        const reason = e.killed
+            ? 'timeout' // usually a macOS "allow Claude Office to control …" (Automation) prompt waiting for a click
+            : /-1743|not authorized to send Apple events|Apple 이벤트/i.test(msg)
+              ? 'automation'
+              : /-1719|-25211|보조 접근|assistive/i.test(msg)
+                ? 'permission'
+                : /not-frontmost/.test(msg)
+                  ? 'mismatch'
+                  : 'failed';
+        return { auto: false, reason, detail: msg.split('\n').pop()?.slice(0, 200) || null };
     }
 };
 
 const routes = {
-    'GET /api/sessions': (req, res) => send(res, 200, { now: Date.now(), sessions: buildSessions() }),
+    'GET /api/sessions': (req, res) => send(res, 200, { now: Date.now(), directSend: APP_MODE, sessions: buildSessions() }),
     'GET /api/diff': (req, res, id) => {
         const s = findSession(id);
         return s ? send(res, 200, diffFor(s)) : send(res, 404, { error: 'unknown session' });

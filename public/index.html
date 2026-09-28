@@ -765,7 +765,7 @@
     return b;
   };
   const renderPanelActions = session => {
-    $('#reply-box').classList.toggle('hidden', !session.link);
+    $('#reply-box').classList.toggle('hidden', !(appMode.directSend && session.link));
     const el = $('#panel-actions');
     el.innerHTML = '';
     if (session.link) el.appendChild(actionBtn('채팅방 열기','open'));
@@ -955,7 +955,9 @@
   const deliveryToast = (data, what) => {
     if (data.auto) return flashPanelError(`${what} 전송했어요`, 4000);
     if (data.reason === 'permission') return flashPanelError(`자동 전송은 손쉬운 사용 권한이 필요해요 · 지금은 채팅방에서 ⌘V → Enter`, 8000);
+    if (data.reason === 'web') return flashPanelError(`${what} 복사됨 · 채팅방에서 ⌘V → Enter (바로 전송은 Claude Office 앱으로 실행할 때만)`, 8000);
     if (data.reason === 'mismatch') return flashPanelError(`채팅 화면을 확인하지 못해 자동 전송을 멈췄어요 · ⌘V → Enter`, 8000);
+    if (data.reason === 'timeout' || data.reason === 'automation') return flashPanelError(`macOS 자동화 허용이 필요해요 (시스템 설정 → 개인정보 보호 및 보안 → 자동화 → Claude Office) · 지금은 ⌘V → Enter`, 10000);
     return flashPanelError(`${what} 복사됨 · 채팅방에서 ⌘V → Enter`, 6000);
   };
   const sendReply = async () => {
@@ -1050,10 +1052,13 @@
       const res = await fetch('/api/sessions', { cache:'no-store' });
       if (!res.ok) return;
       const data = await res.json();
+      appMode.directSend = data.directSend === true;
       applySessions(Array.isArray(data.sessions) ? data.sessions : []);
       openFromUrl();
     } catch {}
   };
+  // Direct send (typing into the Claude app) exists only when the server runs from Claude Office.app.
+  const appMode = { directSend: false };
   // ?open=<session id>&tab=diff opens that session's panel once (bookmarks, README screenshots).
   const urlOpen = { done: false };
   const openFromUrl = () => {
