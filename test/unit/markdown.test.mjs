@@ -94,3 +94,25 @@ test('frontmatter: a leading --- rule or an unclosed block is left to the markdo
     assert.equal(splitFrontmatter('# no frontmatter').meta, null);
     assert.equal(splitFrontmatter('---\n---\nbody').meta, null);
 });
+
+test('file preview body: wiki links show their label, code keeps them literal, report tab untouched', async () => {
+    const { renderDocument } = await import('../../public/js/lib/markdown.js');
+    const body = [
+        'See [[notes/plan|Plan v3]] and [[notes/raw]] ![[img.png]].',
+        '',
+        '| 문서 | 비고 |',
+        '|---|---|',
+        '| [[notes/a\\|목차 분석]] | ok |',
+        '',
+        'Inline `[[keep|me]]` stays.',
+        '```',
+        'if [[ -f x ]]; then echo; fi',
+        '```',
+    ].join('\n');
+    const out = renderDocument(body);
+    assert.match(out, /<p>See Plan v3 and notes\/raw img\.png\.<\/p>/);
+    assert.match(out, /<td>목차 분석<\/td><td>ok<\/td>/); // escaped \| inside a table cell
+    assert.match(out, /<code>\[\[keep\|me\]\]<\/code>/);
+    assert.match(out, /<pre class="md-code"><code>if \[\[ -f x \]\]; then echo; fi<\/code><\/pre>/);
+    assert.match(md('See [[notes/plan|Plan v3]]'), /\[\[notes\/plan\|Plan v3\]\]/); // renderMarkdown (report tab) unchanged
+});

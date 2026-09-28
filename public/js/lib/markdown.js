@@ -135,8 +135,16 @@ export const splitFrontmatter = text => {
   return { meta, body: lines.slice(end + 1).join('\n') };
 };
 
-// Obsidian-style [[path|label]] shows its label, [[path]] its path.
-const wikiLabel = s => s.replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2').replace(/\[\[([^\]]*)\]\]/g, '$1');
+// Obsidian-style [[path|label]] shows its label, [[path]] its path (embeds ![[...]] too). A table
+// cell's escaped [[path\|label]] works as well: the \| is consumed before the table splits cells.
+const wikiLabel = s => s.replace(/!?\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2').replace(/!?\[\[([^\]]*)\]\]/g, '$1');
+// Same over a markdown body, leaving fenced code blocks and `inline code` as written.
+const bodyWikiLabels = body => body.split('\n').reduce((acc, l) => {
+  const fence = /^\s*(```|~~~)/.test(l);
+  acc.lines.push(fence || acc.code ? l : l.split(/(`[^`]+`)/).map(p => (/^`[^`]+`$/.test(p) ? p : wikiLabel(p))).join(''));
+  if (fence) acc.code = !acc.code;
+  return acc;
+}, { lines: [], code: false }).lines.join('\n');
 const fmValue = v => (Array.isArray(v)
   ? (v.length ? `<ul>${v.map(x => `<li>${inlineMd(wikiLabel(x))}</li>`).join('')}</ul>` : '')
   : v ? inlineMd(wikiLabel(v)) : '<span class="md-fm-empty">-</span>');
@@ -144,8 +152,9 @@ const fmValue = v => (Array.isArray(v)
 export const renderFrontmatter = meta =>
   `<div class="md-table md-frontmatter"><table><tbody>${meta.map(m => `<tr><th>${escapeHtml(m.key)}</th><td>${fmValue(m.value)}</td></tr>`).join('')}</tbody></table></div>`;
 
-// A whole .md file: the frontmatter as a small key/value table, then the body.
+// A whole .md file: the frontmatter as a small key/value table, then the body (wiki links shown by
+// label). File previews only: the report tab keeps [[...]] literal (e.g. a bash `[[ -f x ]]`).
 export const renderDocument = text => {
   const { meta, body } = splitFrontmatter(text);
-  return (meta ? renderFrontmatter(meta) : '') + renderMarkdown(body);
+  return (meta ? renderFrontmatter(meta) : '') + renderMarkdown(bodyWikiLabels(body));
 };
