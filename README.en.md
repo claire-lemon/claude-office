@@ -46,7 +46,7 @@ flowchart TB
     SRV <--> DEC
     SRV -- "/api/sessions every 2s" --> UI
     UI -- "confirm · hold · archive · OK" --> SRV
-    SRV -. "confirm · reply<br/>app mode: sent directly<br/>web mode: ⌘V, Enter" .-> S
+    SRV -. "confirm → copy + open chat<br/>(⌘V, Enter)" .-> S
     SRV -. "OK → new-session deep link<br/>(Enter)" .-> NEW
 ```
 
@@ -79,38 +79,6 @@ To open a session's panel directly: `http://127.0.0.1:7777/?open=<session id>` (
 
 Hooks only see turns that start **after** installation. Older sessions active in the last 24 hours show up grey (state unknown).
 
-## Run modes: web · app
-
-| | Web mode | App mode |
-|---|---|---|
-| Start | `node server.mjs` | Double-click `~/Applications/Claude Office.app` (build it once with `node scripts/make-app.mjs`) |
-| Dashboard · report · diff · hold · archive | ✅ | ✅ |
-| Confirm | Copies the instruction and opens the chat → ⌘V, Enter | **Sends directly** |
-| Reply box | Hidden | Shown. Enter **sends directly** (Shift+Enter for a newline) |
-| Permissions | None | Accessibility (Claude Office); allow Automation on the first send |
-| Terminal window | Must stay open | Not needed (runs in the background) |
-
-### App mode setup (once)
-
-1. Build the app
-   ```bash
-   node scripts/make-app.mjs
-   ```
-2. System Settings → Privacy & Security → Accessibility → `+` → ⌘⇧G → `~/Applications/Claude Office.app` → turn it on
-3. Double-click `~/Applications/Claude Office.app`. It starts the server in the background and opens the dashboard; if the server is already running, it only opens the dashboard.
-4. On the first direct send, if macOS asks whether "Claude Office" may control System Events / Claude, click **Allow**.
-5. (Optional) Add Claude Office to System Settings → General → Login Items so it starts when you log in.
-
-- Rebuilding the app (running `make-app.mjs` again) makes macOS treat it as a new app. Remove the old Accessibility entry and add it again.
-- Server log: `~/.claude/office/server.log`. Stop: `lsof -ti tcp:7777 -sTCP:LISTEN | xargs kill`
-
-### Why a direct send can't land in the wrong chat
-
-1. It puts the text on the clipboard and opens that chat.
-2. It checks the app's session file: that session's `lastFocusedAt` must have just moved (the app switched to that chat). If the chat was already on screen, it must be the most recently focused session.
-3. Only then, with the Claude app frontmost, it presses ⌘V and Enter, and restores your previous clipboard.
-4. If it can't confirm, it types nothing. The text stays on the clipboard for a manual ⌘V, Enter.
-
 ## Board columns
 
 | Column | Meaning |
@@ -122,7 +90,7 @@ Hooks only see turns that start **after** installation. Older sessions active in
 
 ## Confirm and next task
 
-1. **컨펌 · 커밋·PR** (confirm · commit/PR) hands the session a "commit → PR → recommend next tasks" instruction: sent directly in app mode; in web mode it is copied and the chat opens, then ⌘V, Enter.
+1. **컨펌 · 커밋·PR** (confirm · commit/PR) copies an instruction to the clipboard and opens that chat. Press ⌘V, then Enter. The session commits, pushes, opens a PR, and recommends next tasks.
 2. When a report includes a `### 다음 작업` (next tasks) section, press **OK · 1번 진행** (OK · run #1), or pick another number. A new session opens with the prompt filled in. Press Enter.
 
 ## Hold, archive, and the archive list
@@ -151,6 +119,5 @@ node scripts/metrics.mjs
 
 - Session titles and chat deep links come from the desktop app's internal files (`~/Library/Application Support/Claude/claude-code-sessions`). They are not a public API. If an app update changes them, titles fall back to folder names and deep links disappear. State tracking keeps working because it uses hooks.
 - Hooks are registered with this folder's absolute path. If you move the folder, run `node install.mjs` again. Until you do, the hook exits with an error; sessions keep working but may show a hook error.
-- The app blanks `q` on existing-chat links (only the new-session link `claude://code/new?q=…` fills the input box). So direct send types ⌘V, Enter in app mode, and web mode uses the clipboard plus opening the chat.
-- Direct send's on-screen check relies on `lastFocusedAt` in the app's internal session files. If an app update changes that field, the check fails and direct send stops (it never sends to the wrong place).
+- No deep link that fills an existing chat's input box was found in the app, so confirm goes through the clipboard (⌘V, Enter). New sessions use the `claude://code/new?q=…` deep link, which fills the input box without sending it.
 - The dashboard parses the Korean `## 결재 보고` heading and its sub-headings exactly as written.

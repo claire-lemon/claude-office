@@ -310,72 +310,57 @@ test('a summary is hidden once the session has a newer event', () => {
     assert.match(lib.buildSessions().find(s => s.id === 'local_4').summary, /예전 요약/);
 });
 
-test('direct send: app mode types only after the chat is confirmed on screen; web mode never types', async () => {
+test('direct send: types only after the chat is confirmed, restores clipboard, falls back safely', async () => {
     const { spawn } = await import('node:child_process');
     const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'office-fakemac-'));
     const log = path.join(bin, 'log.txt');
-    const appDir = path.join(HOME, 'Library/Application Support/Claude/claude-code-sessions/u/u');
     const fake = (name, body) => fs.writeFileSync(path.join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
     fake('pbpaste', 'printf "PREV"');
     fake('pbcopy', `printf "pbcopy:%s\\n" "$(cat)" >> "${log}"`);
-    // Like the real app: opening a chat bumps that session's lastFocusedAt (unless FAKE_FOCUS=no).
-    fake('open', `printf "open:%s\\n" "$1" >> "${log}"
-[ "$FAKE_FOCUS" = "no" ] && exit 0
-id="\${1##*/}"
-node -e 'const f=process.argv[1];const j=JSON.parse(require("fs").readFileSync(f));j.lastFocusedAt=Date.now();require("fs").writeFileSync(f,JSON.stringify(j))' "${appDir}/$id.json"`);
-    fake('osascript', `printf "osa\\n" >> "${log}"
+    fake('open', `printf "open:%s\\n" "$1" >> "${log}"`);
+    fake('osascript', `printf "osa:%s\\n" "$3" >> "${log}"
 case "$FAKE_OSA" in
   ok) exit 0 ;;
-  *) echo "execution error: osascript에 보조 접근이 허용되지 않습니다. (-1719)" >&2; exit 1 ;;
+  perm) echo "execution error: osascript에 보조 접근이 허용되지 않습니다. (-1728)" >&2; exit 1 ;;
+  *) echo "execution error: title-mismatch: Claude (9001)" >&2; exit 1 ;;
 esac`);
-    const scenario = async (port, extraEnv) => {
+    const start = async (port, mode) => {
         const server = spawn('node', [path.join(ROOT, 'server.mjs')], {
-            env: { ...env, OFFICE_DRY: '', OFFICE_PORT: port, PATH: `${bin}${path.delimiter}${process.env.PATH}`, ...extraEnv },
+            env: { ...env, OFFICE_DRY: '', OFFICE_PORT: port, FAKE_OSA: mode, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
         });
         await new Promise(r => server.stdout.once('data', r));
+        return server;
+    };
+    const reply = (port, text) =>
+        fetch(`http://127.0.0.1:${port}/api/reply/local_2`, {
+            method: 'POST',
+            headers: { origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ text }),
+        }).then(r => r.json());
+
+    const ok = await start('7791', 'ok');
+    try {
+        fs.writeFileSync(log, '');
+        const r = await reply('7791', '바로 보내기');
+        assert.equal(r.auto, true);
+        await new Promise(res => setTimeout(res, 1800)); // clipboard restore happens after 1.5s
+        const lines = fs.readFileSync(log, 'utf8').trim().split('\n');
+        assert.deepEqual(lines, ['pbcopy:바로 보내기', 'open:claude://claude.ai/epitaxy/local_2', 'osa:텔레그램 LLM 연동', 'pbcopy:PREV']);
+    } finally {
+        ok.kill();
+    }
+    for (const [port, mode, reason] of [['7792', 'perm', 'permission'], ['7793', 'mismatch', 'mismatch']]) {
+        const server = await start(port, mode);
         try {
             fs.writeFileSync(log, '');
-            const r = await fetch(`http://127.0.0.1:${port}/api/reply/local_2`, {
-                method: 'POST',
-                headers: { origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json' },
-                body: JSON.stringify({ text: '바로 보내기' }),
-            }).then(res => res.json());
-            await new Promise(res => setTimeout(res, 1800)); // clipboard restore happens 1.5s after a send
-            return { r, lines: fs.readFileSync(log, 'utf8').trim().split('\n') };
+            const r = await reply(port, '대기');
+            assert.equal(r.auto, false);
+            assert.equal(r.reason, reason);
+            await new Promise(res => setTimeout(res, 1800));
+            // text stays on the clipboard for a manual paste: no restore
+            assert.ok(!fs.readFileSync(log, 'utf8').includes('pbcopy:PREV'));
         } finally {
             server.kill();
         }
-    };
-    const link = 'open:claude://claude.ai/epitaxy/local_2';
-
-    const sent = await scenario('7791', { OFFICE_APP: '1', FAKE_OSA: 'ok' });
-    assert.equal(sent.r.auto, true);
-    assert.deepEqual(sent.lines, ['pbcopy:바로 보내기', link, 'osa', 'pbcopy:PREV']);
-
-    // The user is now looking at another chat, and the link fails to switch to local_2.
-    const other = path.join(appDir, 'local_5.json');
-    fs.writeFileSync(other, JSON.stringify({ ...JSON.parse(fs.readFileSync(other, 'utf8')), lastFocusedAt: Date.now() + 5000 }));
-    const offScreen = await scenario('7792', { OFFICE_APP: '1', FAKE_OSA: 'ok', FAKE_FOCUS: 'no' });
-    assert.equal(offScreen.r.reason, 'mismatch');
-    assert.deepEqual(offScreen.lines, ['pbcopy:바로 보내기', link]); // nothing typed, text left on the clipboard
-
-    const noPerm = await scenario('7793', { OFFICE_APP: '1', FAKE_OSA: 'perm' });
-    assert.equal(noPerm.r.reason, 'permission');
-    assert.deepEqual(noPerm.lines, ['pbcopy:바로 보내기', link, 'osa']);
-
-    const web = await scenario('7790', { FAKE_OSA: 'ok' });
-    assert.equal(web.r.reason, 'web');
-    assert.deepEqual(web.lines, ['pbcopy:바로 보내기', link]);
-    const modes = await Promise.all(
-        [['7789', {}], ['7788', { OFFICE_APP: '1' }]].map(async ([port, extra]) => {
-            const server = spawn('node', [path.join(ROOT, 'server.mjs')], { env: { ...env, OFFICE_DRY: '1', OFFICE_PORT: port, ...extra } });
-            await new Promise(r => server.stdout.once('data', r));
-            try {
-                return (await fetch(`http://127.0.0.1:${port}/api/sessions`).then(res => res.json())).directSend;
-            } finally {
-                server.kill();
-            }
-        }),
-    );
-    assert.deepEqual(modes, [false, true]);
+    }
 });
