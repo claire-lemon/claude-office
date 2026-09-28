@@ -11,6 +11,8 @@ Design notes (Korean): [`docs/specs/2026-09-25-claude-office-design.md`](docs/sp
 |---|---|
 | ![Report tab: approval report and next tasks](docs/images/panel-report.png) | ![Changes tab: worktree diff](docs/images/panel-diff.png) |
 
+![Meeting room: today's todo blackboard and the facilitator](docs/images/meeting-room.png)
+
 - Zero dependencies (Node 22 standard library + `git`)
 - Binds to `127.0.0.1:7777` only
 - macOS only (uses the Claude desktop app's local files, `open`, and `pbcopy`). Compatibility and verification status (Korean): [`docs/research/2026-09-28-compat-and-verification.md`](docs/research/2026-09-28-compat-and-verification.md)
@@ -60,11 +62,12 @@ flowchart TB
 server.mjs              entry (runs src/http/server.mjs)
 install.mjs             install / uninstall hooks
 hooks/report.mjs        the hook (standalone, no imports, for startup speed)
+bin/office.mjs          blackboard CLI (used by the meeting facilitator and by you; no server needed)
 src/
   config.mjs            env vars, paths, limits (the only place env vars are read)
   http/                 controller: normalize input → call a use case → respond; Host/Origin checks
-  usecases/             flows: session list, changes, confirm/hold/archive, next task, summary, todo ↔ session links
-  domain/               pure functions: status, report parsing, prompts, diff parsing, todo rules
+  usecases/             flows: session list, changes, confirm/hold/archive, next task, summary, todo ↔ session links, meetings
+  domain/               pure functions: status, report parsing, prompts, diff parsing, todo rules, daily note, facilitator guide
   sources/              data in/out: app session files, hook state, transcripts, decisions, git
   platform/             OS side effects: open, pbcopy, claude -p
 public/
@@ -72,7 +75,7 @@ public/
   css/                  base · office · board · panel · changes · markdown
   js/                   main → api · store → views/ · panel/
   js/lib/               import-free modules: math (grid-math, markdown) and small DOM helpers (splitter, inline-edit)
-  js/views/             office, board, header, blackboard (blackboard.js). columns.js (columns) and filters.js (filters) are rule tables
+  js/views/             office, board, header, blackboard (blackboard.js), meeting room (meeting.js). columns.js (columns) and filters.js (filters) are rule tables
   js/panel/             detail panel. actions.js (buttons) is a rule table
 test/unit/              pure-function tests
 test/integration/       server, fixtures, temp git repos
@@ -82,7 +85,7 @@ test/integration/       server, fixtures, temp git repos
 - Rules live in tables. A new column, drop rule, filter, button, or editable field is one more row (where: [design §4](docs/specs/2026-09-28-board-interactions-design.md#4-확장-지점-나중에-기능을-붙이는-곳), Korean).
 - The server (`src/domain/board.mjs`) decides which column a session is in and where it may be dropped, and sends that as `column` and `moves`. The page only displays it.
 - File writes and OS commands live only in `sources/` and `platform/`.
-- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md)
+- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md), [meeting room](docs/specs/2026-09-29-meeting-room-design.md)
 
 ## Try the demo first (touches no real settings)
 
@@ -143,6 +146,24 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
 5. Deleting can be undone for 5 seconds; the board folds (▾) and its width is draggable.
 6. Storage is one file, `~/.claude/office/todos.json`. Links and status are never stored — they are derived on every read.
 
+## Meeting room (daily scrum)
+
+**🏫 회의실** in the header switches the screen to the meeting room: the todo blackboard on the left, the facilitator's seat on the right. It is where yesterday gets summarized and today's todos get brainstormed.
+
+1. **회의 시작** (start): the server writes today's note, `~/.claude/office/daily/YYYY-MM-DD.md` (sessions active since yesterday 00:00 with status, one-line summary and next-task suggestions; the blackboard as it is; recent project folders), then opens a new-session input for the facilitator (just press Enter).
+2. **The facilitator is a real Claude Code session.** It runs in `~/.claude/office` and follows that folder's `CLAUDE.md` (managed by the server). It reads only today's note and what you say; no repo or vault digging, no code edits, no git. Its first message lists "finished yesterday / not finished / suggested for today", and the conversation happens in the app's chat.
+3. Agreed items are written by the facilitator through the **blackboard CLI** (you can use it too):
+   ```bash
+   node bin/office.mjs todo list
+   node bin/office.mjs todo add "title" --folder /abs/path [--detail "…"] [--source scrum]
+   node bin/office.mjs todo update <id> [--title …] [--detail …] [--folder …] [--done true|false]
+   node bin/office.mjs todo delete <id>
+   node bin/office.mjs folders
+   ```
+   Items added in a meeting carry a 🏫 mark on the blackboard. The meeting screen refreshes the facilitator's latest message and the blackboard every 2 seconds.
+4. **회의 끝** (end): archives the facilitator session and appends a `## 회의 n` section (the agreed todos, the facilitator's last message) to the note. You can hold several meetings a day. Only the note's auto block (`<!-- office:auto:start -->` … `end -->`) is regenerated at each start; everything else is kept.
+5. The app may ask for Bash permission each time the facilitator runs the CLI. To stop that, allow just that command in `~/.claude/office/.claude/settings.json` (this app never writes it).
+
 ## Detail panel
 
 - **Report tab**: the approval report rendered as markdown. Each "다음 작업" (next task) item has its own **▶ 진행** (run) button.
@@ -178,7 +199,7 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
 node install.mjs --uninstall
 ```
 
-Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office` (decisions, renames and todos live there). The dashboard only reads app data and sessions, so nothing else changes.
+Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office` (decisions, renames, todos, daily notes and the facilitator guide live there). The dashboard only reads app data and sessions, so nothing else changes.
 
 ## Tests
 
@@ -192,6 +213,8 @@ node scripts/metrics.mjs
 - Session titles and chat deep links come from the desktop app's internal files (`~/Library/Application Support/Claude/claude-code-sessions`). They are not a public API. If an app update changes them, titles fall back to folder names and deep links disappear. State tracking keeps working because it uses hooks.
 - Hooks are registered with this folder's absolute path. If you move the folder, run `node install.mjs` again. Until you do, the hook exits with an error; sessions keep working but may show a hook error.
 - No deep link that fills an existing chat's input box was found in the app, so confirm goes through the clipboard (⌘V, Enter). New sessions use the `claude://code/new?q=…` deep link, which fills the input box without sending it.
+- You talk to the meeting facilitator in the app's chat; the meeting screen shows only its latest message.
+- Meetings and notes use the server's local date. A meeting that crosses midnight is no longer found as "today's".
 - Todo ↔ session links rely on the `#todo-…` marker in a new session's first prompt. Delete that line before sending and the session won't link (start it from the blackboard again).
 - Dragging cards needs a mouse. From the keyboard, the detail panel's hold / unhold / confirm buttons do the same.
 - The dashboard parses the Korean `## 결재 보고` heading and its sub-headings exactly as written.
