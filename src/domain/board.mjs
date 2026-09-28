@@ -11,6 +11,8 @@ export const MOVE_RULES = [
     { to: 'hold', action: 'hold', from: ['working', 'pending', 'done'] },
     { to: 'done', action: 'confirm', from: ['pending', 'hold'] },
     { to: 'base', action: 'undo', from: ['hold', 'done'] },
+    // Not a column: the header's 🗄️ 보관함 button. Any card on the board can be archived.
+    { to: 'archive', action: 'archive', from: ['working', 'pending', 'hold', 'done'] },
 ];
 
 export const movesFor = ({ status, baseStatus }) => {

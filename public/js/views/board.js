@@ -14,6 +14,7 @@ const buildColumn = c => {
   const el = document.createElement('div');
   el.className = 'kan-col';
   el.dataset.col = c.id;
+  el.dataset.drop = c.id; // drop target id for board-dnd.js (= server move `to`)
   const btn = c.headerAction ? `<button type="button" class="col-btn" id="${escapeHtml(c.headerAction.id)}" hidden>${escapeHtml(c.headerAction.label)}</button>` : '';
   el.innerHTML = `<h3 class="col-head">${escapeHtml(c.label)}${btn}</h3><div class="kan-list"></div>`;
   return { def: c, el, list: el.querySelector('.kan-list'), btn: el.querySelector('.col-btn') };

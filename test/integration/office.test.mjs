@@ -151,28 +151,36 @@ test('server: board moves (hold -> done -> undo) and title edits', async () => {
         assert.equal(s6.status, 'review');
         assert.equal(s6.column, 'pending');
         assert.equal(s6.title, s6.appTitle);
-        assert.deepEqual(s6.moves, [{ to: 'hold', action: 'hold' }, { to: 'done', action: 'confirm' }]);
+        const ARCHIVE = { to: 'archive', action: 'archive' };
+        assert.deepEqual(s6.moves, [{ to: 'hold', action: 'hold' }, { to: 'done', action: 'confirm' }, ARCHIVE]);
 
         assert.deepEqual(await json(await move('local_6', 'hold')), { status: 200, body: { ok: true, action: 'hold' } });
         const held = await byId('local_6');
         assert.equal(held.column, 'hold');
-        assert.deepEqual(held.moves, [{ to: 'done', action: 'confirm' }, { to: 'pending', action: 'undo' }]);
+        assert.deepEqual(held.moves, [{ to: 'done', action: 'confirm' }, { to: 'pending', action: 'undo' }, ARCHIVE]);
 
         // 완료 by drag = decision only (no clipboard/chat hand-off, unlike /api/confirm)
         assert.deepEqual(await json(await move('local_6', 'done')), { status: 200, body: { ok: true, action: 'confirm' } });
         const done = await byId('local_6');
         assert.equal(done.column, 'done');
-        assert.deepEqual(done.moves, [{ to: 'hold', action: 'hold' }, { to: 'pending', action: 'undo' }]);
+        assert.deepEqual(done.moves, [{ to: 'hold', action: 'hold' }, { to: 'pending', action: 'undo' }, ARCHIVE]);
 
         assert.deepEqual(await json(await move('local_6', 'pending')), { status: 200, body: { ok: true, action: 'undo' } });
         const back = await byId('local_6');
         assert.equal(back.status, 'review');
         assert.equal(back.column, 'pending');
 
+        // dropped on the 보관함 button: same as the archive button (off the board, listed in 보관함)
+        assert.deepEqual(await json(await move('local_6', 'archive')), { status: 200, body: { ok: true, action: 'archive' } });
+        assert.equal(await byId('local_6'), undefined);
+        const { archived } = await fetch(`${origin}/api/archived`).then(r => r.json());
+        assert.equal(archived.find(a => a.id === 'local_6')?.title, back.title);
+        assert.equal((await post('/api/restore/local_6')).status, 200);
+
         // a working card can't be confirmed, and nothing moves into its own column
         const s5 = await byId('local_5');
         assert.equal(s5.column, 'working');
-        assert.deepEqual(s5.moves, [{ to: 'hold', action: 'hold' }]);
+        assert.deepEqual(s5.moves, [{ to: 'hold', action: 'hold' }, ARCHIVE]);
         assert.deepEqual(await json(await move('local_5', 'done')), { status: 409, body: { error: 'move not allowed', moves: s5.moves } });
         assert.equal((await move('local_5', 'working')).status, 409);
         assert.equal((await post('/api/move/local_5')).status, 409);

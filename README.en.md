@@ -120,6 +120,7 @@ Hooks only see turns that start **after** installation. Older sessions active in
   | 보류 (hold) | Hold, same as the hold button | working, awaiting approval, done |
   | 완료 (done) | Marks it done only. No commit/PR (that's the confirm button) | awaiting approval, hold |
   | Its original column (working or awaiting approval) | Undo the hold / done | hold, done |
+  | The header's 🗄️ 보관함 (archive list) button | Archive, same as the archive button | any card |
 
 - **Filter**: click the **결재 대기** (awaiting approval) or **보류** (hold) count in the header to see only those sessions (just their desks, and that one column, wide). Click **출근** (checked in) to see everyone again.
 

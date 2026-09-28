@@ -15,7 +15,10 @@ test('columnOf: every status', () => {
 });
 
 test('movesFor: every row of the drop table', () => {
-    const to = (status, baseStatus) => movesFor({ status, baseStatus }).map(m => `${m.to}:${m.action}`);
+    // every card on the board can also go to the 보관함 button (last row of the table)
+    const to = (status, baseStatus) => movesFor({ status, baseStatus }).map(m => `${m.to}:${m.action}`).filter(m => m !== 'archive:archive');
+    ['working', 'review', 'question', 'blocked', 'hold', 'done'].forEach(s =>
+        assert.equal(movesFor({ status: s, baseStatus: 'review' }).at(-1).to, 'archive'));
     // working: hold only (never straight to done, the next hook event would pull it back)
     assert.deepEqual(to('working', 'working'), ['hold:hold']);
     // pending (any of the three statuses): hold or done

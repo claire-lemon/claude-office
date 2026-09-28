@@ -21,5 +21,5 @@ export const COLUMNS = [
 
 // Keyed by the server move action (src/domain/board.mjs MOVE_RULES): drop-zone label while
 // dragging, and the toast after a successful drop.
-export const MOVE_HINT = { hold: '보류로', confirm: '완료로 (상태만)', undo: '되돌리기' };
-export const MOVE_TOAST = { hold: '보류로 옮겼어요', confirm: '완료로 옮겼어요 · 커밋·PR은 컨펌 버튼으로', undo: '원래 칸으로 되돌렸어요' };
+export const MOVE_HINT = { hold: '보류로', confirm: '완료로 (상태만)', undo: '되돌리기', archive: '보관함으로' };
+export const MOVE_TOAST = { hold: '보류로 옮겼어요', confirm: '완료로 옮겼어요 · 커밋·PR은 컨펌 버튼으로', undo: '원래 칸으로 되돌렸어요', archive: '보관함으로 옮겼어요' };

@@ -37,7 +37,11 @@
   button.counter{margin:0; color:inherit; line-height:inherit; appearance:none; transition:border-color .15s ease, box-shadow .15s ease;}
   button.counter:hover{border-color:var(--muted);}
   button.counter[aria-pressed="true"]{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent);}
-  .icon-btn.archive-btn{width:auto; padding:0 12px; font-size:13px; white-space:nowrap;}
+  .icon-btn.archive-btn{width:auto; padding:0 12px; font-size:13px; white-space:nowrap; position:relative;}
+  /* card drag (views/board-dnd.js): the 보관함 button is a drop target too; hint shows below it */
+  .archive-btn.drop-ok{outline:2px dashed var(--accent); outline-offset:2px;}
+  .archive-btn.drop-ok::after{content:attr(data-hint); position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%); padding:3px 8px; border-radius:8px; background:var(--card); border:1px solid var(--line); box-shadow:var(--shadow); color:var(--ink); font-size:12px; font-weight:700; white-space:nowrap; pointer-events:none;}
+  .archive-btn.drop-over{outline-style:solid; background:color-mix(in srgb, var(--accent) 22%, var(--card));}
   .archive-dialog{border:1px solid var(--line); border-radius:16px; padding:0; width:min(760px, 94vw); max-height:80vh; background:var(--bg-panel); color:var(--ink);}
   .archive-dialog::backdrop{background:rgba(30,20,12,.38);}
   .archive-head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px 6px; position:relative;}
