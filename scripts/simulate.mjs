@@ -159,6 +159,44 @@ const seedMeeting = async () => {
     refreshNote();
 };
 
+// 연결 기록: an archived first try of the linked todo (so it has 2 sessions), a todo finished yesterday through an
+// archived session and one deleted yesterday (보관함 "지난 할 일", the note's 할 일 기록). No hook state: a hook
+// event would be newer than the archive decision and bring the session back.
+const seedHistory = async () => {
+    const { transcriptPathFor } = await import('../src/sources/transcripts.mjs');
+    const officeDir = path.join(HOME, '.claude/office');
+    const d = new Date();
+    const yesterday = (h, m = 0) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, h, m).getTime();
+    const past = [
+        { n: 11, title: `${TITLES[3]} 1차`, todoId: LINKED_TODO, folder: repoDir(0), lastAt: yesterday(10, 40), archivedAt: yesterday(11, 2) },
+        { n: 12, title: '배포 스크립트 정리', todoId: 'demo04', folder: repoDir(2), lastAt: yesterday(18, 0), archivedAt: yesterday(18, 20) },
+    ];
+    const decisionsFile = path.join(officeDir, 'decisions.json');
+    const decisions = fs.existsSync(decisionsFile) ? JSON.parse(fs.readFileSync(decisionsFile, 'utf8')) : {};
+    past.forEach(({ n, title, todoId, folder, lastAt, archivedAt }) => {
+        const cli = `cli-${n}`;
+        const cwd = path.join(HOME, 'work', `w${n}`);
+        const transcript = transcriptPathFor(cwd, cli);
+        fs.mkdirSync(path.dirname(transcript), { recursive: true });
+        fs.writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content: markerLine(todoId, title) } })}\n`);
+        fs.writeFileSync(
+            path.join(APP, `local_${n}.json`),
+            JSON.stringify({ sessionId: `local_${n}`, cliSessionId: cli, title, cwd, originCwd: folder, worktreePath: null, prs: [], completedTurns: 2, lastActivityAt: lastAt, isArchived: false }),
+        );
+        decisions[`local_${n}`] = { kind: 'archive', at: archivedAt, title, summary: '', lastAt };
+    });
+    fs.writeFileSync(decisionsFile, JSON.stringify(decisions));
+    const todo = (title, folder, extra) => ({ title, detail: '', folder, createdAt: yesterday(9), source: 'manual', manual: null, deletedAt: null, ...extra });
+    fs.writeFileSync(
+        TODOS,
+        JSON.stringify({
+            ...JSON.parse(fs.readFileSync(TODOS, 'utf8')),
+            demo04: todo('배포 스크립트 정리', repoDir(2)),
+            demo05: todo('로그 수집기 교체', repoDir(2), { deletedAt: yesterday(15) }),
+        }),
+    );
+};
+
 const EVENTS = ['UserPromptSubmit', 'Stop-report', 'Notification', 'Stop-question', 'UserPromptSubmit'];
 const tick = n =>
     sessions.forEach((s, i) => {
@@ -171,6 +209,7 @@ const tick = n =>
 
 tick(0);
 if (!process.argv.includes('--once')) {
+    await seedHistory();
     await seedMeeting();
     const loop = n => setTimeout(() => (tick(n), loop(n + 1)), 8000);
     loop(1);

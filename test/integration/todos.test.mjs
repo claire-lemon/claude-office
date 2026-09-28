@@ -2,6 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
+import { once } from 'node:events';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +21,8 @@ const DAYS = n => n * 24 * 3600 * 1000;
 const APP = path.join(HOME, 'Library/Application Support/Claude/claude-code-sessions/u/u');
 const STATE = path.join(HOME, '.claude/office/state');
 const DECISIONS = path.join(HOME, '.claude/office/decisions.json');
+const TODOS = path.join(HOME, '.claude/office/todos.json');
+const LINKS = path.join(HOME, '.claude/office/links.json');
 [APP, STATE, path.join(HOME, 't')].forEach(d => fs.mkdirSync(d, { recursive: true }));
 
 const dir = name => {
@@ -53,13 +56,20 @@ extras.forEach((d, i) => app(`local_x${i}`, `cli-x${i}`, d, NOW - DAYS(4) - i * 
 const PORT = '7792';
 const origin = `http://127.0.0.1:${PORT}`;
 const server = { proc: null };
-before(async () => {
+const start = async () => {
     server.proc = spawn('node', [path.join(ROOT, 'server.mjs')], { env: { ...process.env, OFFICE_HOME: HOME, OFFICE_DRY: '1', OFFICE_PORT: PORT } });
     await new Promise((resolve, reject) => {
         server.proc.stdout.once('data', resolve);
         server.proc.once('exit', code => reject(new Error(`server exited ${code}`)));
     });
-});
+};
+// A fresh process drops the transcript head cache: what survives is on disk (links.json) only.
+const restart = async () => {
+    server.proc.kill();
+    await once(server.proc, 'exit');
+    await start();
+};
+before(start);
 after(() => server.proc?.kill());
 
 const req = (method, p, body, headers = {}) =>
@@ -259,4 +269,87 @@ test('non-GET requests need our Origin (DELETE included)', async () => {
     assert.equal((await req('POST', '/api/todos', { title: 'x', folder: repoA }, { origin: 'http://evil.test' })).status, 403);
     assert.equal((await req('POST', `/api/start/${t.id}`, undefined, { origin: 'http://evil.test' })).status, 403);
     assert.ok(await todoById(t.id));
+});
+
+const links = () => JSON.parse(fs.readFileSync(LINKS, 'utf8'));
+const linkedSession = (id, cli, event, at, todo) => {
+    const file = path.join(HOME, 't', `${cli}.jsonl`);
+    fs.writeFileSync(file, userLine(markerLine(todo.id, todo.title)) + assistantLine(REPORT));
+    app(id, cli, repoA, at, `${id} 세션`);
+    state(cli, event, at, file);
+    return file;
+};
+
+test('연결 기록: links.json keeps links after the transcript is gone (30-day cleanup regression)', async () => {
+    const finished = await create({ title: '기록 완료', folder: repoA });
+    const working = await create({ title: '기록 작업 중', folder: repoA });
+    const tH1 = linkedSession('local_h1', 'cli-h1', 'Stop', Date.now() - 20_000, finished);
+    const tH2 = linkedSession('local_h2', 'cli-h2', 'UserPromptSubmit', Date.now() - 10_000, working);
+    assert.equal((await req('POST', '/api/confirm/local_h1')).status, 200);
+    const confirmedAt = decisions().local_h1.at;
+    const first = { done: await todoById(finished.id), working: await todoById(working.id) };
+    assert.deepEqual([first.done.status, first.done.doneAt, first.working.status, first.working.sessions[0].status], ['done', confirmedAt, 'started', 'working']);
+
+    // only the snapshot fields are stored (no branch / prs / report)
+    const seen = links();
+    assert.deepEqual(seen.local_h1, {
+        todoId: finished.id, title: 'local_h1 세션', animal: first.done.sessions[0].animal, status: 'done', decidedAt: confirmedAt,
+        lastAt: first.done.sessions[0].lastAt, seenAt: seen.local_h1.seenAt,
+    });
+    assert.deepEqual([seen.local_h2.todoId, seen.local_h2.status], [working.id, 'working']);
+
+    // polling while only lastAt moves: the file is not rewritten
+    const mtime = fs.statSync(LINKS).mtimeMs;
+    state('cli-h2', 'UserPromptSubmit', Date.now(), tH2);
+    const polled = await todoById(working.id);
+    await list();
+    assert.ok(polled.sessions[0].lastAt > first.working.sessions[0].lastAt);
+    assert.equal(fs.statSync(LINKS).mtimeMs, mtime);
+    assert.deepEqual(links(), seen);
+
+    // Claude Code's cleanup: transcripts deleted, the done session's app file and hook state gone too
+    [tH1, tH2, path.join(APP, 'local_h1.json'), path.join(STATE, 'cli-h1.json')].forEach(f => fs.rmSync(f));
+    await restart();
+    assert.equal((await sessions()).find(x => x.id === 'local_h2').todoId, null, 'the marker is really unreadable now');
+
+    const done = await todoById(finished.id);
+    assert.deepEqual([done.status, done.by, done.doneAt], ['done', 'session', confirmedAt]);
+    assert.deepEqual(done.sessions, [{ id: 'local_h1', title: 'local_h1 세션', animal: seen.local_h1.animal, status: 'done', column: 'done', lastAt: seen.local_h1.lastAt, decidedAt: confirmedAt }]);
+    const cut = await todoById(working.id);
+    assert.deepEqual([cut.status, cut.by, cut.sessions.length, cut.sessions[0].id, cut.sessions[0].status, cut.sessions[0].column], ['started', 'session', 1, 'local_h2', 'stale', null]);
+    // the vanished snapshot is read, not rewritten
+    assert.deepEqual(links(), seen);
+});
+
+test('GET /api/todo-history: done before today and deleted todos, latest first; GET /api/todos shape unchanged', async () => {
+    const d = new Date(NOW);
+    const yesterday = h => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, h).getTime();
+    const open = await create({ title: '오늘 할 일', folder: repoA });
+    const record = (title, extra) => ({ title, detail: '', folder: repoA, createdAt: yesterday(9), source: 'manual', manual: null, deletedAt: null, ...extra });
+    fs.writeFileSync(
+        TODOS,
+        JSON.stringify({
+            ...JSON.parse(fs.readFileSync(TODOS, 'utf8')),
+            ydone1: record('어제 끝낸 일', { manual: { state: 'done', at: yesterday(12) } }),
+            ydel01: record('어제 지운 일', { deletedAt: yesterday(15) }),
+        }),
+    );
+    const res = await fetch(`${origin}/api/todo-history`);
+    assert.equal(res.status, 200);
+    const { todos, ...rest } = await res.json();
+    assert.deepEqual(rest, {});
+    const ids = todos.map(t => t.id);
+    assert.deepEqual(ids.filter(id => ['ydone1', 'ydel01'].includes(id)), ['ydel01', 'ydone1']);
+    assert.ok(!ids.includes(open.id), "today's open todo stays on the 칠판");
+    const ydone = todos.find(t => t.id === 'ydone1');
+    assert.deepEqual([ydone.status, ydone.by, ydone.doneAt, ydone.project, ydone.sessions, ydone.latest], ['done', 'manual', yesterday(12), 'api', [], null]);
+    assert.equal(todos.find(t => t.id === 'ydel01').deletedAt, yesterday(15));
+    // sorted by the moment it ended, newest first
+    const ended = todos.map(t => t.doneAt || t.deletedAt);
+    assert.deepEqual(ended, [...ended].sort((a, b) => b - a));
+
+    const board = await list();
+    assert.deepEqual(Object.keys(board), ['todos', 'deleted', 'folders']);
+    assert.ok(!board.todos.some(t => ['ydone1', 'ydel01'].includes(t.id)));
+    assert.ok(!board.deleted.some(t => t.id === 'ydel01'), 'only today\'s deletes are offered for 되돌리기');
 });

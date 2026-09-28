@@ -12,7 +12,8 @@ export const ANIMAL_LABELS = {
     cat: '고양이', dog: '강아지', rabbit: '토끼', bear: '곰', penguin: '펭귄',
     fox: '여우', hamster: '햄스터', panda: '판다', duck: '오리', frog: '개구리',
 };
-const TODO_MARK = { open: '☐', started: '◐', done: '☑' };
+// 칠판 marks by todo status; deleted is for 할 일 기록 heads only (not the #todo- regex in domain/todo.mjs).
+const TODO_MARK = { open: '☐', started: '◐', done: '☑', deleted: '✕' };
 export const AUTO_START = '<!-- office:auto:start -->';
 export const AUTO_END = '<!-- office:auto:end -->';
 export const NARRATIVE_START = '<!-- office:narrative:start -->';
@@ -30,6 +31,11 @@ export const hhmm = ms => {
     const d = new Date(ms);
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+const mmdd = ms => {
+    const d = new Date(ms);
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const stamp = ms => `${mmdd(ms)} ${hhmm(ms)}`;
 // Local midnight of the day before (the "어제 세션" window). Date arithmetic keeps DST days right.
 export const startOfYesterday = now => {
     const d = new Date(now);
@@ -62,13 +68,33 @@ const todoExtra = ({ status, latest, doneAt }) =>
             : '';
 const todoLine = t => [`${TODO_MARK[t.status] ?? TODO_MARK.open} ${t.title} — ${t.project}`, todoExtra(t)].filter(Boolean).join(' · ');
 
-export const autoSection = ({ since, sessions = [], todos = [], folders = [] }) =>
+// ── 할 일 기록 (todo-history design §3.2-3.3): a todo with every session it went through ──
+
+// One linked session: animal, title, status, and its decision time (else its last activity).
+export const historyLine = s => `${ANIMAL_LABELS[s.animal] ?? s.animal} ${s.title} — ${STATUS_LABEL[s.status] ?? s.status} · ${stamp(s.decidedAt ?? s.lastAt)}`;
+// view.sessions is newest first; the history reads oldest first.
+export const todoHistory = view => [...(view.sessions || [])].sort((a, b) => a.lastAt - b.lastAt).map(historyLine);
+const historyHead = t => {
+    const count = t.sessions?.length || 0;
+    return [
+        `${t.deletedAt ? TODO_MARK.deleted : TODO_MARK[t.status] ?? TODO_MARK.open} ${t.title} — ${t.project}`,
+        t.status === 'done' && t.doneAt && `완료 ${stamp(t.doneAt)}`,
+        t.deletedAt && `삭제 ${stamp(t.deletedAt)}`,
+        count > 0 && `세션 ${count}개`,
+    ].filter(Boolean).join(' · ');
+};
+const historyItems = todos => todos.flatMap((t, i) => [`${i + 1}. ${historyHead(t)}`, ...numbered(todoHistory(t), '   ')]);
+
+// history = TodoViews touched since `since` (deleted ones too), oldest first.
+export const autoSection = ({ since, sessions = [], todos = [], folders = [], history = [] }) =>
     [
         AUTO_START,
         `## 어제 세션 (${localDate(since)} ${hhmm(since)} 이후)`,
         ...(sessions.length ? sessionItems(sessions) : ['1. 없음']),
         '## 칠판 (지금)',
         ...numbered(orNone(todos.map(todoLine))),
+        `## 할 일 기록 (${localDate(since)} ${hhmm(since)} 이후)`,
+        ...(history.length ? historyItems(history) : ['1. 없음']),
         '## 최근 프로젝트 폴더',
         ...numbered(orNone(folders.map(f => `${f.name} — ${f.path}`))),
         AUTO_END,
@@ -122,13 +148,15 @@ const narrativeItem = (s, i) =>
         .filter(Boolean)
         .join('\n');
 
-// Oldest first so the narrator reads the day in order (the auto block lists newest first).
-export const narrativeInput = ({ since, sessions }) =>
+// Oldest first so the narrator reads the day in order (the auto block lists newest first). todos = the same
+// 할 일 기록 items, so sessions that went into one 칠판 할 일 read as one piece of work.
+export const narrativeInput = ({ since, sessions, todos = [] }) =>
     [
         `기간: ${localDate(since)} ${hhmm(since)} 이후, 세션 ${sessions.length}개 (오래된 순)`,
         '<sessions>',
         ...[...sessions].sort((a, b) => a.lastAt - b.lastAt).map(narrativeItem),
         '</sessions>',
+        ...(todos.length ? ['<todos>', ...historyItems(todos), '</todos>'] : []),
         '위 세션들로 업무일지의 어제 이야기를 써라.',
     ].join('\n');
 

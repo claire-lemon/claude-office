@@ -7,7 +7,7 @@ import { startNextTask } from '../usecases/next-task.mjs';
 import { summarize } from '../usecases/summarize.mjs';
 import { moveSession } from '../usecases/move.mjs';
 import { editSession } from '../usecases/edit-session.mjs';
-import { listTodos, createTodo, updateTodo, deleteTodo, startTodo } from '../usecases/todos.mjs';
+import { listTodos, todoHistory, createTodo, updateTodo, deleteTodo, startTodo } from '../usecases/todos.mjs';
 import { getMeeting, startMeeting, endMeeting } from '../usecases/meeting.mjs';
 import { readJsonBody } from './body.mjs';
 
@@ -95,6 +95,8 @@ export const routes = {
         return send(res, 200, result);
     },
     'GET /api/todos': (req, res) => send(res, 200, listTodos()),
+    // 보관함 "지난 할 일": todos the 칠판 no longer shows.
+    'GET /api/todo-history': (req, res) => send(res, 200, todoHistory()),
     // One route key for both: no id = create (201), /api/todos/:id = update (done, deleted:false live here too).
     'POST /api/todos': async (req, res, id) => {
         const body = await readJsonBody(req, { limit: TODO_BODY_LIMIT });

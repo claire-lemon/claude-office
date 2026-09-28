@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
     STATUS_LABEL, AUTO_START, AUTO_END, autoSection, replaceAuto, noteSkeleton, meetingSection, appendSection,
     localDate, hhmm, startOfYesterday, NARRATIVE_START, NARRATIVE_END, narrativeInput, narrativeSection, replaceNarrative, narrationDue,
+    historyLine, todoHistory,
 } from '../../src/domain/daily-note.mjs';
 
 // Local-time moments so HH:MM and dates don't depend on the machine's timezone.
@@ -13,6 +14,24 @@ const open = { title: '회의록', project: 'web', status: 'open', latest: null,
 const started = { title: '결제 모듈', project: 'api', status: 'started', latest: { animal: 'rabbit', status: 'working' }, doneAt: null };
 const startedLean = { title: '예전 작업', project: 'api', status: 'started', latest: { animal: 'frog', status: 'stale' }, doneAt: null };
 const done = { title: '배포', project: 'infra', status: 'done', latest: null, doneAt: at(10, 7) };
+// 할 일 기록 (design §3.3 example): sessions come newest first, as TodoView.sessions does.
+const linked = (id, animal, title, status, lastAt, decidedAt = null) => ({ id, animal, title, status, lastAt, decidedAt });
+const HISTORY = [
+    {
+        title: '결제 모듈 리팩터링', project: 'api', status: 'done', doneAt: at(18, 20, 28), deletedAt: null,
+        sessions: [linked('s2', 'dog', '결제 리팩터링 2차', 'done', at(18, 0, 28), at(18, 20, 28)), linked('s1', 'rabbit', '결제 리팩터링 1차', 'archived', at(10, 0, 28), at(11, 2, 28))],
+    },
+    { title: '회의록 정리', project: 'web', status: 'started', doneAt: null, deletedAt: null, sessions: [linked('s3', 'cat', '회의록 초안', 'review', at(0, 40))] },
+    { title: '배포 스크립트', project: 'infra', status: 'open', doneAt: null, deletedAt: at(15, 0, 28), sessions: [] },
+];
+const HISTORY_LINES = [
+    '1. ☑ 결제 모듈 리팩터링 — api · 완료 09-28 18:20 · 세션 2개',
+    '   1. 토끼 결제 리팩터링 1차 — 보관 · 09-28 11:02',
+    '   2. 강아지 결제 리팩터링 2차 — 완료 · 09-28 18:20',
+    '2. ◐ 회의록 정리 — web · 세션 1개',
+    '   1. 고양이 회의록 초안 — 결재 대기 · 09-29 00:40',
+    '3. ✕ 배포 스크립트 — infra · 삭제 09-28 15:00',
+];
 
 test('date helpers: local date, HH:MM, yesterday 00:00 (month boundary too)', () => {
     assert.equal(localDate(at(9, 5)), DATE);
@@ -37,6 +56,7 @@ test('autoSection: status labels, diff stat, 📋 link, 한 줄 요약 (report, 
         ],
         todos: [open, started, startedLean, done],
         folders: [{ name: 'api', path: '/r/api', lastAt: 1 }, { name: 'web', path: '/r/web', lastAt: 0 }],
+        history: HISTORY,
     });
     assert.equal(
         auto,
@@ -57,6 +77,8 @@ test('autoSection: status labels, diff stat, 📋 link, 한 줄 요약 (report, 
             '2. ◐ 결제 모듈 — api · 토끼 작업 중',
             '3. ◐ 예전 작업 — api · 개구리 지난 세션',
             '4. ☑ 배포 — infra · 완료 10:07',
+            '## 할 일 기록 (2026-09-28 00:00 이후)',
+            ...HISTORY_LINES,
             '## 최근 프로젝트 폴더',
             '1. api — /r/api',
             '2. web — /r/web',
@@ -66,12 +88,25 @@ test('autoSection: status labels, diff stat, 📋 link, 한 줄 요약 (report, 
     assert.deepEqual(Object.keys(STATUS_LABEL).sort(), ['archived', 'blocked', 'done', 'hold', 'question', 'review', 'stale', 'unknown', 'working']);
 });
 
-test('autoSection: empty sessions / 칠판 / folders read 없음', () => {
-    assert.equal(
-        autoSection({ date: DATE, since: SINCE, sessions: [], todos: [], folders: [] }),
-        [AUTO_START, '## 어제 세션 (2026-09-28 00:00 이후)', '1. 없음', '## 칠판 (지금)', '1. 없음', '## 최근 프로젝트 폴더', '1. 없음', AUTO_END].join('\n'),
-    );
+test('autoSection: empty sessions / 칠판 / 할 일 기록 / folders read 없음', () => {
+    const empty = [
+        AUTO_START, '## 어제 세션 (2026-09-28 00:00 이후)', '1. 없음', '## 칠판 (지금)', '1. 없음', '## 할 일 기록 (2026-09-28 00:00 이후)', '1. 없음',
+        '## 최근 프로젝트 폴더', '1. 없음', AUTO_END,
+    ].join('\n');
+    assert.equal(autoSection({ date: DATE, since: SINCE, sessions: [], todos: [], folders: [], history: [] }), empty);
+    assert.equal(autoSection({ date: DATE, since: SINCE }), empty);
 });
+
+test('historyLine / todoHistory: animal, title, status, decision time else last activity; oldest first', () => {
+    assert.equal(historyLine(linked('s', 'fox', '초안', 'working', at(9, 5, 1))), '여우 초안 — 작업 중 · 09-01 09:05');
+    assert.equal(historyLine(linked('s', 'fox', '초안', 'done', at(9, 5), at(21, 30))), '여우 초안 — 완료 · 09-29 21:30');
+    // unknown animal / status fall through as is
+    assert.equal(historyLine(linked('s', 'owl', '초안', 'new-thing', at(9, 5))), 'owl 초안 — new-thing · 09-29 09:05');
+    assert.deepEqual(todoHistory(HISTORY[0]), ['토끼 결제 리팩터링 1차 — 보관 · 09-28 11:02', '강아지 결제 리팩터링 2차 — 완료 · 09-28 18:20']);
+    assert.deepEqual(todoHistory({ sessions: [] }), []);
+    assert.deepEqual(HISTORY[0].sessions.map(x => x.id), ['s2', 's1'], 'the view is not reordered');
+});
+
 
 test('replaceAuto: swaps only the marker block; text before and after (회의 1, hand notes) stays', () => {
     const oldAuto = `${AUTO_START}\n## 칠판 (지금)\n1. 없음\n${AUTO_END}`;
@@ -143,6 +178,14 @@ test('narrativeInput: oldest first, optional lines only when present, request he
     // the reply keeps its end (결재 보고 is there), marked as cut
     assert.ok(input.includes(`마지막 응답:\n…${'나'.repeat(2000 - '\n## 결재 보고'.length)}\n## 결재 보고\n</session>`));
     assert.equal(lines.at(-2), '</sessions>');
+});
+
+test('narrativeInput: todos -> a <todos> block of 할 일 기록 items right after </sessions>', () => {
+    const sessions = [{ title: 'x', status: 'done', lastAt: at(9, 0), prompt: '', outcome: '' }];
+    const lines = narrativeInput({ since: SINCE, sessions, todos: HISTORY }).split('\n');
+    const end = lines.indexOf('</sessions>');
+    assert.deepEqual(lines.slice(end + 1), ['<todos>', ...HISTORY_LINES, '</todos>', '위 세션들로 업무일지의 어제 이야기를 써라.']);
+    assert.ok(!narrativeInput({ since: SINCE, sessions, todos: [] }).includes('<todos>'));
 });
 
 test('narrativeSection: header with window, count, time; our markers and H1/H2 in model output neutralised', () => {

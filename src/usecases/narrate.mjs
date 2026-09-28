@@ -7,6 +7,7 @@ import { narrativeInput, narrativeSection, replaceNarrative, narrationDue, local
 import { NARRATIVE_SYSTEM } from '../domain/prompts.mjs';
 import { runSummarizer } from '../platform/claude-cli.mjs';
 import { refreshNote, recentWork } from './meeting.mjs';
+import { listTodos } from './todos.mjs';
 
 // 16 real sessions took 95s (the summarizer's 60s is too short). Stays under NARRATE_EVERY so two timer runs
 // never overlap.
@@ -21,8 +22,10 @@ export const narrateNote = async (now = Date.now(), run = runSummarizer) => {
         prompt: firstPromptText(transcript),
         outcome: lastAssistantText(transcript),
     }));
+    // The note's 할 일 기록, so sessions of one 칠판 할 일 are told as one piece of work.
+    const { history } = listTodos(now, { since });
     // No sessions -> no model call; the section still goes in so the timer stops for the day.
-    const body = sessions.length ? await run(narrativeInput({ since, sessions }), NARRATIVE_SYSTEM, NARRATE_TIMEOUT) : '';
+    const body = sessions.length ? await run(narrativeInput({ since, sessions, todos: history }), NARRATIVE_SYSTEM, NARRATE_TIMEOUT) : '';
     const date = localDate(now);
     // Read again after the model call: a 회의 n section may have been appended meanwhile.
     const section = narrativeSection({ at: now, since, count: sessions.length, body });

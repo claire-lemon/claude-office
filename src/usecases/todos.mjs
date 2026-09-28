@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { TODO_FOLDERS_LIMIT, OFFICE_DIR } from '../config.mjs';
 import * as todosStore from '../sources/todos.mjs';
 import { loadAppSessions } from '../sources/app-sessions.mjs';
-import { normalizeTodoPatch, toTodoView, visibleToday, isSameLocalDay } from '../domain/todo.mjs';
+import { normalizeTodoPatch, toTodoView, visibleToday, isSameLocalDay, touchedSince } from '../domain/todo.mjs';
 import { todoPrompt, newSessionLink } from '../domain/prompts.mjs';
 import { openUrl } from '../platform/macos.mjs';
 import { listSessions } from './list-sessions.mjs';
@@ -40,20 +40,31 @@ export const folders = () =>
         .slice(0, TODO_FOLDERS_LIMIT)
         .map(f => ({ path: f.path, name: path.basename(f.path), lastAt: f.lastAt }));
 
-export const listTodos = (now = Date.now()) => {
-    const entries = Object.entries(todosStore.load());
+// Every todo as a view, deleted ones included (one linkIndex per call).
+const allViews = now => {
     const index = links(now);
+    return Object.entries(todosStore.load()).map(([id, todo]) => viewOf(id, todo, index, now));
+};
+const byCreated = (a, b) => a.createdAt - b.createdAt;
+
+// { since } adds `history`: every todo touched from then on, deleted ones too (the note's 할 일 기록).
+export const listTodos = (now = Date.now(), { since } = {}) => {
+    const views = allViews(now);
     return {
-        todos: entries
-            .filter(([, todo]) => !todo.deletedAt)
-            .map(([id, todo]) => viewOf(id, todo, index, now))
-            .filter(view => visibleToday(view, now))
-            .sort((a, b) => a.createdAt - b.createdAt),
+        todos: views.filter(view => !view.deletedAt && visibleToday(view, now)).sort(byCreated),
         // Deleted today = still offered for 되돌리기.
-        deleted: entries.filter(([, todo]) => isSameLocalDay(todo.deletedAt, now)).map(([id, todo]) => ({ id, title: todo.title })),
+        deleted: views.filter(view => isSameLocalDay(view.deletedAt, now)).map(({ id, title }) => ({ id, title })),
         folders: folders(),
+        ...(since == null ? {} : { history: views.filter(view => touchedSince(view, since)).sort(byCreated) }),
     };
 };
+
+// 보관함 "지난 할 일": what the 칠판 no longer shows (deleted, or done before today), latest ending first.
+export const todoHistory = (now = Date.now()) => ({
+    todos: allViews(now)
+        .filter(view => view.deletedAt || !visibleToday(view, now))
+        .sort((a, b) => (b.doneAt || b.deletedAt) - (a.doneAt || a.deletedAt)),
+});
 
 // Who wrote the todo: the 칠판 form (HTTP) or the 회의실 facilitator (CLI --source scrum).
 const SOURCES = ['manual', 'scrum'];

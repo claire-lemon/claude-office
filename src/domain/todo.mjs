@@ -1,6 +1,7 @@
-// Pure 오늘의 할 일 rules: the #todo- marker, editable fields, derived status, the API view.
+// Pure 오늘의 할 일 rules: the #todo- marker, editable fields, derived status, the API view, link snapshots.
 // No fs/child_process/Date.now/process.env; `now` comes in as an argument.
 import path from 'node:path';
+import { columnOf } from './board.mjs';
 
 // A new session's first prompt line carries the marker; the server finds it in the transcript head.
 export const TODO_MARK = /#todo-([a-z0-9]{6})\b/;
@@ -93,3 +94,45 @@ export const toTodoView = ({ id, todo, sessions, now }) => {
         latest: sorted[0] ?? null,
     };
 };
+
+// ── 연결 기록 (todo-history design §3.1): links.json keeps every link seen, so it outlives its transcript ──
+
+// Fields whose change is worth a write. lastAt alone is not: it moves every turn and the 칠판 polls every 2s.
+const SNAPSHOT_KEYS = ['todoId', 'title', 'status', 'decidedAt'];
+const toRecord = (todoId, view, seenAt) => ({
+    todoId, title: view.title, animal: view.animal, status: view.status, decidedAt: view.decidedAt ?? null, lastAt: view.lastAt, seenAt,
+});
+
+// stored = links.json, live = [{ todoId, view }] found by marker now. -> { [sessionId]: LinkRecord } to upsert:
+// new links and ones whose todo / title / status / decision moved. seenAt = when the link was first seen.
+export const linkChanges = (stored, live, now) =>
+    Object.fromEntries(
+        live
+            .map(({ todoId, view }) => {
+                const prev = Object.hasOwn(stored, view.id) ? stored[view.id] : null;
+                return { id: view.id, prev, record: toRecord(todoId, view, prev?.seenAt ?? now) };
+            })
+            .filter(({ prev, record }) => !prev || SNAPSHOT_KEYS.some(k => prev[k] !== record[k]))
+            .map(({ id, record }) => [id, record]),
+    );
+
+// A stored link whose marker is gone (transcript deleted): done/archived stay, anything else was cut off
+// mid-way, so it reads stale.
+const KEEPS_STATUS = new Set(['done', 'archived']);
+const vanished = (id, r) => {
+    const status = KEEPS_STATUS.has(r.status) ? r.status : 'stale';
+    return { id, title: r.title, animal: r.animal, status, column: columnOf(status), lastAt: r.lastAt, decidedAt: r.decidedAt ?? null };
+};
+
+// -> Map<todoId, LinkedSession[]> recent first. A live view always wins over its snapshot (all its fields kept).
+export const mergeLinks = (stored, live) => {
+    const liveIds = new Set(live.map(l => l.view.id));
+    const gone = Object.entries(stored)
+        .filter(([id]) => !liveIds.has(id))
+        .map(([id, r]) => ({ todoId: r.todoId, view: vanished(id, r) }));
+    return new Map([...Map.groupBy([...live, ...gone], l => l.todoId)].map(([todoId, ls]) => [todoId, ls.map(l => l.view).sort(byRecent)]));
+};
+
+// Anything happened to the todo at or after `since`: written, done, deleted, checked, or a session moved.
+export const touchedSince = (view, since) =>
+    [view.createdAt, view.doneAt, view.deletedAt, view.manual?.at, ...(view.sessions || []).map(s => s.lastAt)].some(t => t != null && t >= since);

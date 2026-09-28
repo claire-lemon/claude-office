@@ -92,13 +92,13 @@ export const recentWork = (now = Date.now()) => {
         });
 };
 
-// Rebuilds the note's auto block (yesterday 00:00 onward + the 칠판 + folders) and keeps the rest.
+// Rebuilds the note's auto block (yesterday 00:00 onward + the 칠판 + 할 일 기록 + folders) and keeps the rest.
 export const refreshNote = (now = Date.now()) => {
     const date = localDate(now);
     const since = startOfYesterday(now);
     const sessions = recentWork(now).map(w => w.view);
-    const { todos, folders } = listTodos(now);
-    return notes.write(date, replaceAuto(notes.read(date), autoSection({ date, since, sessions, todos, folders }), date));
+    const { todos, folders, history } = listTodos(now, { since });
+    return notes.write(date, replaceAuto(notes.read(date), autoSection({ date, since, sessions, todos, folders, history }), date));
 };
 
 export const startMeeting = (now = Date.now()) => {

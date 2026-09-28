@@ -15,6 +15,7 @@ const { OFFICE_DIR, NARRATE_HOUR, NARRATE_AUTO } = await import('../../src/confi
 const { narrateIfDue } = await import('../../src/usecases/narrate.mjs');
 const { NARRATIVE_SYSTEM } = await import('../../src/domain/prompts.mjs');
 const { meetingPrompt } = await import('../../src/domain/meeting.mjs');
+const { markerLine } = await import('../../src/domain/todo.mjs');
 const { localDate, NARRATIVE_START, AUTO_END, appendSection } = await import('../../src/domain/daily-note.mjs');
 
 const day = new Date();
@@ -39,13 +40,19 @@ const transcript = (cli, ...lines) => {
 const assistant = text => line({ type: 'assistant', isSidechain: false, message: { role: 'assistant', content: [{ type: 'text', text }] } });
 const note = () => fs.readFileSync(NOTE, 'utf8');
 
-// A work session shaped like a real transcript (app preamble, reminder block before the prompt, tool result),
-// a facilitator (a meeting, not work) and a session from three days ago (outside the window).
+// A work session shaped like a real transcript (app preamble, reminder block before the prompt, tool result)
+// started from a 칠판 todo (marker line first), a facilitator (a meeting, not work) and a session from three
+// days ago (outside the window).
+const MARKER = markerLine('pay001', '결제 모듈');
+fs.writeFileSync(
+    path.join(OFFICE_DIR, 'todos.json'),
+    JSON.stringify({ pay001: { title: '결제 모듈', detail: '', folder: repo, createdAt: Date.now() - 3600_000, source: 'manual', manual: null, deletedAt: null } }),
+);
 const tW = transcript(
     'cli-w',
     line({ type: 'queue-operation' }),
     line({ type: 'attachment' }),
-    line({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: '<system-reminder>\n앱 안내\n</system-reminder>' }, { type: 'text', text: '결제 모듈 분리해줘' }] } }),
+    line({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: '<system-reminder>\n앱 안내\n</system-reminder>' }, { type: 'text', text: `${MARKER}\n결제 모듈 분리해줘` }] } }),
     line({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'ls 결과' }] } }),
     assistant('## 결재 보고\n### 한 줄 요약\n1. 결제 분리 완료'),
 );
@@ -74,12 +81,15 @@ test('narrateIfDue: nothing before NARRATE_HOUR, once after it, then not again t
     assert.equal(system, NARRATIVE_SYSTEM);
     assert.ok(timeout > 60000);
     assert.match(input, /<session n="1">\n제목: W 세션\n/);
-    assert.ok(input.includes('요청:\n결제 모듈 분리해줘\n'), 'first prompt without the reminder block');
+    assert.ok(input.includes(`요청:\n${MARKER}\n결제 모듈 분리해줘\n`), 'first prompt without the reminder block');
+    // the linked todo, with its sessions, right after the sessions
+    assert.match(input, /<\/sessions>\n<todos>\n1\. ◐ 결제 모듈 — api · 세션 1개\n {3}1\. \S+ W 세션 — 결재 대기 · \d{2}-\d{2} \d{2}:\d{2}\n<\/todos>\n/);
     assert.ok(input.includes('마지막 응답:\n## 결재 보고\n### 한 줄 요약\n1. 결제 분리 완료\n</session>'));
     assert.ok(!input.includes('진행자') && !input.includes('옛 세션'));
     const text = note();
     assert.ok(text.indexOf(AUTO_END) < text.indexOf(NARRATIVE_START), 'narrative after the auto block');
     assert.ok(text.includes('이후 세션 1개'));
+    assert.match(text, /## 할 일 기록 \(\d{4}-\d{2}-\d{2} 00:00 이후\)\n1\. ◐ 결제 모듈 — api · 세션 1개\n/);
     assert.ok(text.includes('1. **api**: 결제 모듈을 나눴다.'));
 
     assert.equal(await narrateIfDue(today(NARRATE_HOUR + 2), run), null);

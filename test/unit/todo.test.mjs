@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TODO_MARK, markerLine, todoIdIn, normalizeTodoPatch, todoStatus, visibleToday, isSameLocalDay, toTodoView } from '../../src/domain/todo.mjs';
+import {
+    TODO_MARK, markerLine, todoIdIn, normalizeTodoPatch, todoStatus, visibleToday, isSameLocalDay, toTodoView, linkChanges, mergeLinks, touchedSince,
+} from '../../src/domain/todo.mjs';
 import { todoPrompt, NEXT_PROMPT_LIMIT } from '../../src/domain/prompts.mjs';
 
 const todo = (manual = null) => ({ title: '결제 모듈', detail: '', folder: '/r/api', createdAt: 1, source: 'manual', manual, deletedAt: null });
@@ -149,4 +151,52 @@ test('todoPrompt: over the limit, detail is cut and the marker line never is', (
     const emoji = todoPrompt({ ...t, detail: '😀'.repeat(3000) }, null);
     assert.ok(emoji.length <= NEXT_PROMPT_LIMIT);
     assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(emoji));
+});
+
+// A live link as linkIndex builds it: board views carry branch/prs/report too.
+const live = (todoId, id, status, lastAt, extra = {}) => ({ todoId, view: { id, title: `t-${id}`, animal: 'cat', status, column: 'working', lastAt, decidedAt: null, ...extra } });
+const record = (todoId, status, lastAt, seenAt, extra = {}) => ({ todoId, title: 't-s1', animal: 'cat', status, decidedAt: null, lastAt, seenAt, ...extra });
+
+test('linkChanges: new links and todo / title / status / decision changes only; lastAt alone writes nothing', () => {
+    assert.deepEqual(linkChanges({}, [live('a1b2c3', 's1', 'working', 100, { branch: 'feat/x', prs: [], report: null })], 500), { s1: record('a1b2c3', 'working', 100, 500) });
+    const stored = { s1: record('a1b2c3', 'working', 100, 50) };
+    assert.deepEqual(linkChanges(stored, [live('a1b2c3', 's1', 'working', 900)], 500), {});
+    // status moved: rewritten with the current lastAt, the first-seen time kept
+    assert.deepEqual(linkChanges(stored, [live('a1b2c3', 's1', 'review', 900)], 500), { s1: record('a1b2c3', 'review', 900, 50) });
+    assert.deepEqual(linkChanges(stored, [live('a1b2c3', 's1', 'done', 900, { decidedAt: 950 })], 500), { s1: record('a1b2c3', 'done', 900, 50, { decidedAt: 950 }) });
+    assert.deepEqual(Object.keys(linkChanges(stored, [live('zz9x0y', 's1', 'working', 100)], 500)), ['s1']);
+    assert.deepEqual(Object.keys(linkChanges(stored, [live('a1b2c3', 's1', 'working', 100, { title: '새 이름' })], 500)), ['s1']);
+    // a stored link that is not live now is left alone (mergeLinks shows it)
+    assert.deepEqual(linkChanges(stored, [], 500), {});
+});
+
+test('mergeLinks: live wins with all its fields; vanished done/archived stay, the rest read stale', () => {
+    const stored = {
+        s1: record('a1b2c3', 'working', 100, 50),
+        s2: record('a1b2c3', 'archived', 80, 40, { title: '1차', decidedAt: 90 }),
+        s3: record('zz9x0y', 'done', 70, 30, { title: '끝', decidedAt: 75 }),
+        s4: record('zz9x0y', 'working', 60, 20, { title: '중단' }),
+    };
+    const liveOne = live('a1b2c3', 's1', 'review', 200, { column: 'pending', branch: 'feat/x', prs: [{ url: 'u' }], report: { '한 줄 요약': '1. x' } });
+    const merged = mergeLinks(stored, [liveOne]);
+    assert.deepEqual([...merged.keys()].sort(), ['a1b2c3', 'zz9x0y']);
+    const [first, second] = merged.get('a1b2c3');
+    assert.equal(first, liveOne.view);
+    assert.deepEqual(second, { id: 's2', title: '1차', animal: 'cat', status: 'archived', column: null, lastAt: 80, decidedAt: 90 });
+    assert.deepEqual(merged.get('zz9x0y'), [
+        { id: 's3', title: '끝', animal: 'cat', status: 'done', column: 'done', lastAt: 70, decidedAt: 75 },
+        { id: 's4', title: '중단', animal: 'cat', status: 'stale', column: null, lastAt: 60, decidedAt: null },
+    ]);
+    assert.deepEqual(mergeLinks({}, []), new Map());
+});
+
+test('touchedSince: any of created / done / deleted / manual check / a session at or after since', () => {
+    const base = { createdAt: 10, doneAt: null, deletedAt: null, manual: null, sessions: [] };
+    assert.equal(touchedSince(base, 100), false);
+    assert.equal(touchedSince({ ...base, createdAt: 100 }, 100), true);
+    assert.equal(touchedSince({ ...base, doneAt: 150 }, 100), true);
+    assert.equal(touchedSince({ ...base, deletedAt: 150 }, 100), true);
+    assert.equal(touchedSince({ ...base, manual: { state: 'open', at: 150 } }, 100), true);
+    assert.equal(touchedSince({ ...base, sessions: [{ lastAt: 20 }, { lastAt: 150 }] }, 100), true);
+    assert.equal(touchedSince({ ...base, doneAt: 50, deletedAt: 60, manual: { state: 'done', at: 50 }, sessions: [{ lastAt: 99 }] }, 100), false);
 });

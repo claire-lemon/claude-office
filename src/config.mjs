@@ -15,6 +15,7 @@ export const SUMMARY_DIR = path.join(OFFICE_DIR, 'summaries');
 export const DECISIONS_FILE = path.join(OFFICE_DIR, 'decisions.json');
 export const OVERRIDES_FILE = path.join(OFFICE_DIR, 'overrides.json');
 export const TODOS_FILE = path.join(OFFICE_DIR, 'todos.json');
+export const LINKS_FILE = path.join(OFFICE_DIR, 'links.json'); // 할 일 ↔ 세션 연결 스냅샷 (todo-history design §3.1)
 export const DAILY_DIR = path.join(OFFICE_DIR, 'daily'); // 오늘 일지 YYYY-MM-DD.md
 export const GUIDE_FILE = path.join(OFFICE_DIR, 'CLAUDE.md'); // the facilitator session's instructions
 export const CLI_PATH = path.join(ROOT, 'bin/office.mjs'); // 칠판 CLI, written into the guide

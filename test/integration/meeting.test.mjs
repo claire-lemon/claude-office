@@ -98,6 +98,8 @@ test('start (dry run): note with the auto block, facilitator deep link with meet
     assert.match(text, /\n1\. W 세션 — 결재 대기\n {3}1\. 한 줄 요약: 결제 분리 완료\n {3}2\. 다음 작업 추천: 타입 배포\n/);
     assert.ok(!text.includes('옛 세션'));
     assert.ok(text.includes('## 칠판 (지금)\n1. ☐ 회의 준비 — api\n'));
+    // 할 일 기록 sits between the 칠판 and the folders; a todo written today is in it
+    assert.match(text, /\n## 칠판 \(지금\)\n1\. ☐ 회의 준비 — api\n## 할 일 기록 \(\d{4}-\d{2}-\d{2} 00:00 이후\)\n1\. ☐ 회의 준비 — api\n## 최근 프로젝트 폴더\n/);
     assert.ok(text.includes(`## 최근 프로젝트 폴더\n1. api — ${repo}\n`));
     // nothing is counted until the facilitator session itself shows up
     const meeting = await get('/api/meeting');

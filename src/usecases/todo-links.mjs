@@ -1,13 +1,15 @@
 // linkIndex(boardSessions, now) -> Map<todoId, LinkedSession[]> (design §6.2): every session whose transcript
 // head carries a #todo- marker, on the board or not. Board sessions reuse their full view; the rest get a
-// lean one that never reads the transcript tail or git.
+// lean one that never reads the transcript tail or git. Links seen once are kept in links.json (todo-history
+// design §3.1), so a todo keeps its sessions after their transcripts are cleaned up.
 import path from 'node:path';
 import * as decisionsStore from '../sources/decisions.mjs';
 import * as overridesStore from '../sources/overrides.mjs';
+import * as linksStore from '../sources/links.mjs';
 import { firstPromptHead } from '../sources/transcripts.mjs';
 import { columnOf } from '../domain/board.mjs';
 import { ANIMALS, hash } from '../domain/session-view.mjs';
-import { todoIdIn, byRecent } from '../domain/todo.mjs';
+import { todoIdIn, linkChanges, mergeLinks } from '../domain/todo.mjs';
 import { collectCandidates, transcriptOf } from './list-sessions.mjs';
 
 // branch/prs/report ride along for todoPrompt's "이전 세션" line (board sessions only).
@@ -31,13 +33,25 @@ const lean = ({ cli, state, app, id, active, lastAt }, decisions, overrides) => 
     };
 };
 
+// The snapshot is a nice-to-have: a read-only home must not break GET /api/todos (live links still answer).
+const saveChanges = changes => {
+    try {
+        linksStore.saveMany(changes);
+    } catch (e) {
+        console.error(`links.json not written: ${e.message}`);
+    }
+};
+
 export const linkIndex = (boardSessions, now = Date.now()) => {
     const onBoard = new Map(boardSessions.map(s => [s.id, s]));
     const decisions = decisionsStore.load();
     const overrides = overridesStore.load();
-    const links = collectCandidates({ now, decisions })
+    const live = collectCandidates({ now, decisions })
         .map(c => ({ todoId: todoIdIn(firstPromptHead(transcriptOf(c))), c }))
         .filter(l => l.todoId)
         .map(({ todoId, c }) => ({ todoId, view: onBoard.has(c.id) ? pick(onBoard.get(c.id)) : lean(c, decisions, overrides) }));
-    return new Map([...Map.groupBy(links, l => l.todoId)].map(([todoId, ls]) => [todoId, ls.map(l => l.view).sort(byRecent)]));
+    const stored = linksStore.load();
+    const changes = linkChanges(stored, live, now);
+    if (Object.keys(changes).length) saveChanges(changes);
+    return mergeLinks({ ...stored, ...changes }, live);
 };
