@@ -33,6 +33,8 @@ export const writeJsonAtomic = (file, data) => {
     fs.renameSync(tmp, file);
 };
 
+const tilde = p => (p && (p === HOME || p.startsWith(`${HOME}/`)) ? `~${p.slice(HOME.length)}` : p);
+
 export const hash = (s = '') => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 const listFiles = (dir, depth) => {
@@ -227,21 +229,24 @@ export const buildSessions = (now = Date.now()) => {
                 ? fs.readFileSync(path.join(SUMMARY_DIR, `${id}.md`), 'utf8')
                 : null;
             const status = deriveStatus({ state, hasReport: !!report, decision: decisions[id] });
+            const gi = cwd && fs.existsSync(cwd) ? gitInfo(cwd) : { project: null, branch: null };
             return {
                 id,
                 cli,
                 title: app?.title || path.basename(cwd) || cli.slice(0, 8),
                 animal: ANIMALS[hash(id) % ANIMALS.length],
-                repo: path.basename(app?.originCwd || cwd),
+                repo: gi.project || path.basename(app?.originCwd || cwd),
                 repoHue: hash(app?.originCwd || cwd) % 360,
                 status,
                 event: state?.event || null,
                 eventAt: state?.at || null,
                 message: state?.message || null,
                 lastAt,
-                branch: app?.branch || null,
+                branch: app?.branch || gi.branch,
                 sourceBranch: app?.sourceBranch || null,
                 originCwd: app?.originCwd || null,
+                projectPath: tilde(app?.originCwd || cwd) || null,
+                cwd: tilde(cwd) || null,
                 nextTasks: parseTasks(report?.['다음 작업']),
                 worktreePath: app?.worktreePath || null,
                 prs: (app?.prs || []).map(p => ({ number: p.number, state: p.state, url: p.url })),
@@ -255,6 +260,31 @@ export const buildSessions = (now = Date.now()) => {
                 lastMessage: lastText.slice(0, 20000),
             };
         });
+};
+
+// Project name (origin remote's repo name, else folder name) and current branch for a folder.
+// ponytail: 10s cache per folder; branches rarely move faster than a human reads the board.
+const gitInfoCache = new Map();
+const GIT_INFO_TTL = 10000;
+export const gitInfo = dir => {
+    if (!dir) return { project: null, branch: null };
+    const hit = gitInfoCache.get(dir);
+    if (hit && Date.now() - hit.at < GIT_INFO_TTL) return hit.info;
+    const run = args => {
+        try {
+            return git(dir, args).trim() || null;
+        } catch {
+            return null;
+        }
+    };
+    const remote = run(['remote', 'get-url', 'origin']);
+    const branch = run(['rev-parse', '--abbrev-ref', 'HEAD']);
+    const info = {
+        project: remote ? path.basename(remote).replace(/\.git$/, '') : path.basename(dir),
+        branch: branch === 'HEAD' ? null : branch,
+    };
+    gitInfoCache.set(dir, { at: Date.now(), info });
+    return info;
 };
 
 // Diff shortstat for cards; cached per (session, event) so polling doesn't re-run git.

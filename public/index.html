@@ -157,6 +157,13 @@
   .panel-animal svg{width:28px; height:36px; display:block; flex:none;}
   #panel-name{font-size:15px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .panel-sub{font-size:12px; color:var(--muted); margin-top:4px;}
+  .panel-loc{margin-top:6px; font-size:12px; display:grid; gap:2px;}
+  .panel-loc > div{display:flex; gap:6px; min-width:0;}
+  .panel-loc .loc-k{flex:none; color:var(--muted); width:74px;}
+  .panel-loc code{font-size:11px; overflow-wrap:anywhere; background:var(--card); border:1px solid var(--line); border-radius:4px; padding:0 4px;}
+  .kan-loc{font-size:11px; color:var(--muted); margin:3px 0 2px; min-width:0;}
+  .kan-loc > div{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .kan-loc .loc-cwd{font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:10.5px;}
   .panel-diffstat{font-size:12px; margin-top:4px;}
   .panel-diffstat.hidden{display:none;}
   .panel-tabs{display:flex; gap:4px; padding:0 16px; border-bottom:1px solid var(--line);}
@@ -258,6 +265,7 @@
   <div class="panel-head">
     <div class="panel-title"><span id="panel-animal" class="panel-animal"></span><strong id="panel-name"></strong></div>
     <div class="panel-sub" id="panel-sub"></div>
+    <div class="panel-loc" id="panel-loc"></div>
     <div class="panel-diffstat hidden" id="panel-diffstat"></div>
   </div>
   <div class="panel-tabs">
@@ -608,11 +616,14 @@
     return '';
   };
 
+  // Keep the tail of long paths: the worktree / folder name is the part that tells sessions apart.
+  const shortPath = p => !p ? '-' : p.length > 44 ? `…${p.slice(-43)}` : p;
+
   const buildCard = session => {
     const card = document.createElement('div');
     card.className = 'kan-card';
     card.dataset.id = session.id;
-    card.innerHTML = `<div class="kan-top"><span class="kan-avatar"><svg viewBox="0 0 24 34"><use href="#animal-${safeAnimal(session.animal)}"/></svg></span><span class="kan-title"></span><span class="kan-tag hidden"></span></div><div class="kan-meta"></div><div class="kan-diffstat hidden"></div>`;
+    card.innerHTML = `<div class="kan-top"><span class="kan-avatar"><svg viewBox="0 0 24 34"><use href="#animal-${safeAnimal(session.animal)}"/></svg></span><span class="kan-title"></span><span class="kan-tag hidden"></span></div><div class="kan-loc"><div class="loc-proj"></div><div class="loc-branch"></div><div class="loc-cwd"></div></div><div class="kan-meta"></div><div class="kan-diffstat hidden"></div>`;
     return card;
   };
   const updateCard = (card, session) => {
@@ -623,6 +634,15 @@
     tag.textContent = tagText;
     tag.classList.toggle('tag-danger', session.status === 'blocked');
     tag.classList.toggle('hidden', !tagText);
+    const proj = card.querySelector('.loc-proj');
+    proj.textContent = `📁 ${session.repo || '-'}`;
+    proj.title = session.projectPath || '';
+    const br = card.querySelector('.loc-branch');
+    br.textContent = `🌿 ${session.branch || '브랜치 없음'}`;
+    br.title = session.branch || '';
+    const cwdEl = card.querySelector('.loc-cwd');
+    cwdEl.textContent = `📍 ${shortPath(session.cwd)}`;
+    cwdEl.title = session.cwd || '';
     card.querySelector('.kan-meta').textContent = metaLine(session);
     const dsEl = card.querySelector('.kan-diffstat');
     const dsHtml = diffStatHtml(session);
@@ -713,6 +733,18 @@
     $('#panel-name').textContent = session.title || '(제목 없음)';
     const prLabel = (session.prs && session.prs.length) ? prStateLabel(session.prs[0].state) : '-';
     $('#panel-sub').textContent = `${ANIMAL_LABELS[safeAnimal(session.animal)]} · ${session.branch || '-'} · PR ${prLabel} · ${session.turns ?? '-'}턴`;
+    const loc = $('#panel-loc');
+    loc.replaceChildren(...[
+      ['📁 프로젝트', session.projectPath],
+      ['🌿 브랜치', session.branch ? `${session.branch}${session.sourceBranch ? ` ← ${session.sourceBranch}` : ''}` : '브랜치 없음'],
+      ['📍 세션 위치', session.cwd],
+    ].map(([k, v]) => {
+      const row = document.createElement('div');
+      const key = document.createElement('span'); key.className = 'loc-k'; key.textContent = k;
+      const val = document.createElement('code'); val.textContent = v || '-';
+      row.append(key, val);
+      return row;
+    }));
     const dsEl = $('#panel-diffstat');
     const dsHtml = diffStatHtml(session);
     dsEl.innerHTML = dsHtml;
