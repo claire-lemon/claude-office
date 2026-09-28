@@ -151,6 +151,20 @@
   .report-sec p{font-size:13px; line-height:1.5; margin:0 0 6px;}
   .report-sec ul,.report-sec ol{margin:0 0 6px; padding-left:18px; font-size:13px; line-height:1.5;}
   .report-sec code{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:0 3px; font-size:12px;}
+  .report-sec h3,.report-sec h5,.report-sec h6{font-size:13px; margin:10px 0 4px;}
+  .report-sec li{margin:2px 0;} .report-sec li ul,.report-sec li ol{margin:2px 0 2px;}
+  .report-sec li.task{list-style:none; margin-left:-18px;} .report-sec li.task input{margin:0 4px 0 0; vertical-align:-1px;}
+  .report-sec strong{font-weight:700;} .report-sec a{color:var(--accent, #4a7bd0);}
+  .report-sec blockquote{margin:0 0 8px; padding:4px 10px; border-left:3px solid var(--line); color:var(--muted);}
+  .report-sec hr{border:none; border-top:1px dashed var(--line); margin:10px 0;}
+  .report-sec pre.md-code{margin:0 0 8px; padding:8px 10px; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow-x:auto; font-size:12px; line-height:1.45;}
+  .report-sec pre.md-code code{border:none; padding:0; background:none; white-space:pre; word-break:normal;}
+  .report-sec .md-table{overflow-x:auto; margin:0 0 8px;}
+  .report-sec table{border-collapse:collapse; font-size:12px; min-width:100%;}
+  .report-sec th,.report-sec td{border:1px solid var(--line); padding:4px 6px; text-align:left; vertical-align:top; overflow-wrap:normal; word-break:keep-all;}
+  .report-sec th{background:var(--card); font-weight:600;}
+  details.full-msg{border-top:1px dashed var(--line); padding-top:8px;}
+  details.full-msg > summary{font-size:12px; color:var(--muted); cursor:pointer; margin-bottom:6px;}
   .hint{font-size:12px; color:var(--muted);}
   .diff-stat{font-size:12px; font-weight:700;}
   .diff-file{margin-bottom:8px; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
@@ -427,26 +441,99 @@
     $('#window-svg').classList.toggle('night', !(h >= 6 && h < 18));
   };
 
-  // ---------- markdown (tiny, safe) ----------
-  const inlineMd = s => escapeHtml(s).replace(/`([^`]+)`/g, (m,c) => `<code>${c}</code>`);
+  // ---------- markdown viewer (no deps; escape first, then format) ----------
+  const fmtInline = t => t
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~(.+?)~~/g, '<del>$1</del>')
+    .replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\w)/g, '$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  const inlineMd = s => escapeHtml(s)
+    .split(/(`[^`]+`)/)
+    .map(part => /^`[^`]+`$/.test(part) ? `<code>${part.slice(1, -1)}</code>` : fmtInline(part))
+    .join('');
+
+  const LIST_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+  const isTableSep = l => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(l);
+  const cells = l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+
+  const renderList = items => {
+    const ordered = /\d/.test(items[0].marker);
+    const base = items[0].indent;
+    const groups = items.reduce((acc, it) => {
+      if (it.indent <= base || !acc.length) acc.push({ ...it, children: [] });
+      else acc[acc.length - 1].children.push(it);
+      return acc;
+    }, []);
+    const lis = groups.map(g => {
+      const task = g.text.match(/^\[([ xX])\]\s+(.*)$/);
+      const body = task
+        ? `<input type="checkbox" disabled${task[1] !== ' ' ? ' checked' : ''}> ${inlineMd(task[2])}`
+        : inlineMd(g.text);
+      return `<li${task ? ' class="task"' : ''}>${body}${g.children.length ? renderList(g.children) : ''}</li>`;
+    }).join('');
+    return ordered ? `<ol>${lis}</ol>` : `<ul>${lis}</ul>`;
+  };
+
   const renderMarkdown = text => {
-    const lines = String(text || '').split('\n');
+    const lines = String(text || '').replace(/\r/g, '').split('\n');
     const out = [];
-    const st = { list: null };
-    const closeList = () => { if (st.list) { out.push(`</${st.list}>`); st.list = null; } };
-    lines.forEach(raw => {
-      const line = raw.trim();
-      if (!line) { closeList(); return; }
-      const h = line.match(/^(#{2,4})\s+(.*)/);
-      if (h) { closeList(); const lvl = Math.min(h[1].length+2,6); out.push(`<h${lvl}>${inlineMd(h[2])}</h${lvl}>`); return; }
-      const bullet = line.match(/^[-*]\s+(.*)/);
-      if (bullet) { if (st.list!=='ul'){closeList(); out.push('<ul>'); st.list='ul';} out.push(`<li>${inlineMd(bullet[1])}</li>`); return; }
-      const num = line.match(/^\d+[.)]\s+(.*)/);
-      if (num) { if (st.list!=='ol'){closeList(); out.push('<ol>'); st.list='ol';} out.push(`<li>${inlineMd(num[1])}</li>`); return; }
-      closeList();
-      out.push(`<p>${inlineMd(line)}</p>`);
-    });
-    closeList();
+    const st = { i: 0 };
+    const take = pred => {
+      const got = [];
+      while (st.i < lines.length && pred(lines[st.i], st.i)) got.push(lines[st.i++]);
+      return got;
+    };
+    while (st.i < lines.length) {
+      const line = lines[st.i];
+      const fence = line.match(/^\s*(```|~~~)\s*([\w-]*)/);
+      if (fence) {
+        st.i++;
+        const code = take(l => !l.trim().startsWith(fence[1]));
+        st.i++;
+        out.push(`<pre class="md-code"${fence[2] ? ` data-lang="${escapeHtml(fence[2])}"` : ''}><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+        continue;
+      }
+      if (!line.trim()) { st.i++; continue; }
+      const h = line.match(/^\s*(#{1,6})\s+(.*)$/);
+      if (h) { st.i++; out.push(`<h${Math.min(h[1].length + 2, 6)}>${inlineMd(h[2])}</h${Math.min(h[1].length + 2, 6)}>`); continue; }
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { st.i++; out.push('<hr>'); continue; }
+      if (line.includes('|') && isTableSep(lines[st.i + 1] || '')) {
+        const head = cells(line);
+        st.i += 2;
+        const rows = take(l => l.includes('|') && l.trim()).map(cells);
+        out.push(`<div class="md-table"><table><thead><tr>${head.map(c => `<th>${inlineMd(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${head.map((_, k) => `<td>${inlineMd(r[k] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+        continue;
+      }
+      if (/^\s*>/.test(line)) {
+        const quoted = take(l => /^\s*>/.test(l)).map(l => l.replace(/^\s*>\s?/, ''));
+        out.push(`<blockquote>${renderMarkdown(quoted.join('\n'))}</blockquote>`);
+        continue;
+      }
+      if (LIST_RE.test(line)) {
+        const items = take(l => LIST_RE.test(l) || (/^\s{2,}\S/.test(l) && !!l.trim()))
+          .reduce((acc, l) => {
+            const m = l.match(LIST_RE);
+            if (m) acc.push({ indent: m[1].replace(/\t/g, '  ').length, marker: m[2], text: m[3] });
+            else if (acc.length) acc[acc.length - 1].text += ` ${l.trim()}`;
+            return acc;
+          }, []);
+        // "- a" followed by "1. b" at the same level are two lists, not one.
+        const base = items[0].indent;
+        const runs = items.reduce((acc, it) => {
+          const ord = /\d/.test(it.marker);
+          const last = acc[acc.length - 1];
+          if (!last || (it.indent <= base && last.ord !== ord)) acc.push({ ord, items: [it] });
+          else last.items.push(it);
+          return acc;
+        }, []);
+        out.push(runs.map(r => renderList(r.items)).join(''));
+        continue;
+      }
+      const para = take((l, i) => l.trim() && !LIST_RE.test(l) && !/^\s*(#{1,6}\s|>|```|~~~)/.test(l)
+        && !isTableSep(l) && !(l.includes('|') && isTableSep(lines[i + 1] || '')));
+      const shown = para.length ? para : [lines[st.i++]];
+      out.push(`<p>${shown.map(l => inlineMd(l.trim())).join('<br>')}</p>`);
+    }
     return out.join('');
   };
 
@@ -474,7 +561,7 @@
   const countReviewItems = report => {
     const body = report && report['리뷰 필요'];
     if (!body) return 0;
-    return body.split('\n').filter(l => /^\s*[-*]\s+/.test(l)).length;
+    return body.split('\n').filter(l => /^[-*]\s+/.test(l)).length; // top-level items only
   };
   // diffStat: {files, add, del} | null — only present for review/question sessions with a worktree.
   // A review with files===0 gets a "변경 없음" warning tag: a done report with no diff deserves a second look.
@@ -620,19 +707,27 @@
     el.appendChild(actionBtn(session.status==='done' ? '컨펌 취소' : '컨펌', session.status==='done' ? 'unconfirm' : 'confirm'));
   };
 
+  const fullMessage = session => session.lastMessage
+    ? `<details class="full-msg report-sec"><summary>전체 응답 보기</summary>${renderMarkdown(session.lastMessage)}</details>`
+    : '';
   const renderReportPane = session => {
     const pane = $('#pane-report');
-    if (session.report) {
-      pane.innerHTML = Object.entries(session.report)
-        .map(([heading,body]) => `<section class="report-sec"><h4>${escapeHtml(heading)}</h4>${renderMarkdown(body)}</section>`)
-        .join('');
-    } else if (session.summary) {
-      pane.innerHTML = `<section class="report-sec">${renderMarkdown(session.summary)}</section>`;
-    } else if (session.preview) {
-      pane.innerHTML = `<section class="report-sec">${renderMarkdown(session.preview)}<p class="hint">전체 보고서가 없어 최근 응답 일부만 표시했어요. '요약 만들기'를 눌러보세요.</p></section>`;
-    } else {
-      pane.innerHTML = '<p class="hint">표시할 내용이 없어요.</p>';
-    }
+    const html = session.report
+      ? Object.entries(session.report)
+          .map(([heading, body]) => `<section class="report-sec"><h4>${escapeHtml(heading)}</h4>${renderMarkdown(body)}</section>`)
+          .join('') + fullMessage(session)
+      : session.summary
+        ? `<section class="report-sec">${renderMarkdown(session.summary)}</section>${fullMessage(session)}`
+        : session.lastMessage
+          ? `<section class="report-sec">${renderMarkdown(session.lastMessage)}<p class="hint">결재 보고 블록이 없어 마지막 응답 전체를 보여줘요. 정리가 필요하면 '요약 만들기'를 눌러보세요.</p></section>`
+          : '<p class="hint">표시할 내용이 없어요.</p>';
+    // Polling re-renders every 2s: skip identical HTML so scroll and open <details> survive.
+    if (pane.dataset.html === html) return;
+    const wasOpen = pane.querySelector('details.full-msg')?.open;
+    pane.innerHTML = html;
+    pane.dataset.html = html;
+    const details = pane.querySelector('details.full-msg');
+    if (details && wasOpen) details.open = true;
   };
 
   const patchLines = patch => String(patch||'').split('\n').map(l => {

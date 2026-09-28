@@ -170,6 +170,7 @@ export const buildSessions = (now = Date.now()) => {
                 summary,
                 diffStat: ['review', 'question'].includes(status) ? statFor(id, state?.at, app) : null,
                 preview: report ? null : lastText.slice(0, 300),
+                lastMessage: lastText.slice(0, 20000),
             };
         });
 };

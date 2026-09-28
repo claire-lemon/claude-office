@@ -22,10 +22,16 @@ const REPORT = `작업 끝났습니다.
 
 ## 결재 보고
 ### 한 줄 요약
-뷰에 workspace$ 요약 객체 추가 (하위 호환 유지)
+뷰에 **workspace$** 요약 객체 추가 (하위 호환 유지)
+
+| 항목 | 결과 |
+|---|---|
+| 단위 테스트 | ✅ 42 passed |
+| 로컬 API | ✅ \`http :8888/profile\` |
 ### 리뷰 필요
 - \`src/modules/profile/views.ts:42\` — 새 필드 노출 범위 확인
 - \`src/lib/profile/use-case.ts:88\` — N+1 조회 가능성
+  - [ ] workspace 캐시 적용 여부 확인
 ### 리스크 / 배포 의존성
 my-types 먼저 배포 후 API 배포
 ### 테스트 방법
