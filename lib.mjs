@@ -307,7 +307,7 @@ const statFor = (id, at, app) => {
 };
 
 const git = (cwd, args) =>
-    execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', timeout: 3000, maxBuffer: 16 * 1024 * 1024 });
+    execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', timeout: 3000, maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
 
 export const diffFor = session => {
     const wt = session.worktreePath;

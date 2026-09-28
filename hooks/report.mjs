@@ -6,6 +6,8 @@ import path from 'node:path';
 import os from 'node:os';
 
 try {
+    // Set by the dashboard's own `claude -p` summarizer so it never shows up as a session.
+    if (process.env.OFFICE_SKIP_HOOK) process.exit(0);
     const input = JSON.parse(fs.readFileSync(0, 'utf8'));
     const id = String(input.session_id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const event = input.hook_event_name;

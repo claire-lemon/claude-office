@@ -182,3 +182,48 @@ test('hold / archive / restore through the server', async () => {
         server.kill();
     }
 });
+
+test('summarizer runs isolated: no tools, no persistence, no hooks, temp cwd', async () => {
+    const { spawn } = await import('node:child_process');
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'office-fakeclaude-'));
+    const log = path.join(bin, 'call.json');
+    // Fake `claude`: records how it was called and prints a canned report.
+    fs.writeFileSync(
+        path.join(bin, 'claude'),
+        `#!/usr/bin/env node
+const fs = require('fs');
+const input = fs.readFileSync(0, 'utf8');
+fs.writeFileSync(${JSON.stringify(log)}, JSON.stringify({ args: process.argv.slice(2), skip: process.env.OFFICE_SKIP_HOOK, cwd: process.cwd(), input }));
+process.stdout.write('## 결재 보고\\n### 한 줄 요약\\n1. 요약 완료\\n');
+`,
+        { mode: 0o755 },
+    );
+    const port = '7796';
+    const server = spawn('node', [path.join(ROOT, 'server.mjs')], {
+        env: { ...env, OFFICE_DRY: '1', OFFICE_PORT: port, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
+    });
+    await new Promise(r => server.stdout.once('data', r));
+    const origin = `http://127.0.0.1:${port}`;
+    try {
+        const res = await fetch(`${origin}/api/summary/local_3`, { method: 'POST', headers: { origin } }).then(r => r.json());
+        assert.match(res.summary, /요약 완료/);
+        const call = JSON.parse(fs.readFileSync(log, 'utf8'));
+        assert.equal(call.args[call.args.indexOf('--tools') + 1], '');
+        assert.ok(call.args.includes('--no-session-persistence'));
+        assert.ok(call.args.includes('--system-prompt'));
+        assert.equal(call.skip, '1');
+        assert.equal(fs.realpathSync(call.cwd), fs.realpathSync(os.tmpdir()));
+        assert.match(call.input, /<transcript>[\s\S]*<\/transcript>/);
+    } finally {
+        server.kill();
+    }
+});
+
+test('hook does nothing when OFFICE_SKIP_HOOK is set', () => {
+    const r = spawnSync('node', [path.join(ROOT, 'hooks/report.mjs')], {
+        env: { ...env, OFFICE_SKIP_HOOK: '1' },
+        input: JSON.stringify({ session_id: 'skipme', hook_event_name: 'Stop' }),
+    });
+    assert.equal(r.status, 0);
+    assert.ok(!fs.existsSync(path.join(HOME, '.claude/office/state', 'skipme.json')));
+});
