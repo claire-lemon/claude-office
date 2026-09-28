@@ -17,7 +17,8 @@ const server = http.createServer((req, res) => {
         // DNS rebinding: a hostile page can make the browser send any request here under its own hostname.
         // Only answer our own Host, for GETs too (they expose transcripts and diffs).
         if (!HOSTS.includes(req.headers.host)) return send(res, 403, { error: 'bad host' });
-        if (req.method === 'POST' && !ORIGINS.includes(req.headers.origin)) return send(res, 403, { error: 'bad origin' });
+        // Anything that changes state (POST, DELETE, ...) must come from our own page.
+        if (req.method !== 'GET' && !ORIGINS.includes(req.headers.origin)) return send(res, 403, { error: 'bad origin' });
         const [, , name, id = ''] = url.pathname.split('/');
         const route = url.pathname.startsWith('/api/') && routes[`${req.method} /api/${name}`];
         // Handlers may be async; the catch below only sees sync throws.

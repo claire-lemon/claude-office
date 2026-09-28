@@ -7,6 +7,7 @@ import { startNextTask } from '../usecases/next-task.mjs';
 import { summarize } from '../usecases/summarize.mjs';
 import { moveSession } from '../usecases/move.mjs';
 import { editSession } from '../usecases/edit-session.mjs';
+import { listTodos, createTodo, updateTodo, deleteTodo, startTodo } from '../usecases/todos.mjs';
 import { readJsonBody } from './body.mjs';
 
 export const send = (res, code, body, type = 'application/json; charset=utf-8') => {
@@ -15,6 +16,12 @@ export const send = (res, code, body, type = 'application/json; charset=utf-8') 
 };
 
 const findSession = id => listSessions().find(s => s.id === id);
+
+// A 2000-char Korean detail is ~6KB of JSON, over readJsonBody's 4KB default.
+const TODO_BODY_LIMIT = 16 * 1024;
+// Todo usecase errors that mean "no such thing"; every other one is a bad request.
+const TODO_NOT_FOUND = new Set(['unknown todo', 'repo folder not found']);
+const todoError = (res, error) => send(res, TODO_NOT_FOUND.has(error) ? 404 : 400, { error });
 
 export const routes = {
     'GET /api/sessions': (req, res) => send(res, 200, { now: Date.now(), sessions: listSessions() }),
@@ -83,5 +90,24 @@ export const routes = {
         const result = editSession(s, body.value);
         if (result.error) return send(res, 400, { error: result.error });
         return send(res, 200, result);
+    },
+    'GET /api/todos': (req, res) => send(res, 200, listTodos()),
+    // One route key for both: no id = create (201), /api/todos/:id = update (done, deleted:false live here too).
+    'POST /api/todos': async (req, res, id) => {
+        const body = await readJsonBody(req, { limit: TODO_BODY_LIMIT });
+        if (!body.ok) return send(res, body.code, { error: body.error });
+        const result = id ? updateTodo(id, body.value) : createTodo(body.value);
+        if (result.error) return todoError(res, result.error);
+        return send(res, id ? 200 : 201, { ok: true, todo: result.todo });
+    },
+    'DELETE /api/todos': (req, res, id) => {
+        const result = deleteTodo(id);
+        if (result.error) return todoError(res, result.error);
+        return send(res, 200, { ok: true });
+    },
+    'POST /api/start': (req, res, id) => {
+        const result = startTodo(id);
+        if (result.error) return todoError(res, result.error);
+        return send(res, 200, { ok: true, opened: result.opened });
     },
 };

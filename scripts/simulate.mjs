@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { markerLine } from '../src/domain/todo.mjs';
 
 const HOME = process.env.OFFICE_HOME;
 if (!HOME || path.resolve(HOME) === os.homedir()) {
@@ -72,11 +73,33 @@ const repoDir = n => {
     return dir;
 };
 
+// 오늘의 할 일: one open, one linked to local_3 through the marker, one checked off by hand today.
+const LINKED_TODO = 'demo02';
+const TODOS = path.join(HOME, '.claude/office/todos.json');
+if (!fs.existsSync(TODOS)) {
+    const now = Date.now();
+    const todo = (title, folder, createdAt, manual = null) => ({ title, detail: '', folder, createdAt, source: 'manual', manual, deletedAt: null });
+    fs.mkdirSync(path.dirname(TODOS), { recursive: true });
+    fs.writeFileSync(
+        TODOS,
+        JSON.stringify({
+            demo01: { ...todo('결제 모듈 리팩터링', repoDir(0), now - 3000), detail: 'PG 응답 파싱을 use-case로 옮기기' },
+            [LINKED_TODO]: todo(TITLES[3], repoDir(0), now - 2000),
+            demo03: todo('주간 회의록 공유', repoDir(1), now - 1000, { state: 'done', at: now }),
+        }),
+    );
+}
+
 const sessions = TITLES.map((title, i) => {
     const cli = `cli-${i}`;
     const cwd = i === 0 ? repo : path.join(HOME, 'work', `w${i}`);
     const transcript = path.join(HOME, '.claude/projects/p', `${cli}.jsonl`);
     fs.mkdirSync(path.dirname(transcript), { recursive: true });
+    // local_3 was started from a 칠판 todo: its first prompt line carries the marker (must be the file's top line).
+    if (i === 3 && !fs.existsSync(transcript)) {
+        const content = markerLine(LINKED_TODO, title);
+        fs.writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`);
+    }
     fs.mkdirSync(APP, { recursive: true });
     fs.writeFileSync(
         path.join(APP, `local_${i}.json`),

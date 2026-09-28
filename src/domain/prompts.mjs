@@ -1,4 +1,5 @@
 // Pure prompt/text builders: no fs/child_process/Date.now/process.env.
+import { markerLine } from './todo.mjs';
 
 export const CONFIRM_INSTRUCTION = `결재 승인. 아래 순서로 진행해줘.
 1. 변경사항 커밋 (이 레포의 커밋 메시지 규칙 준수, 변경이 없으면 생략)
@@ -27,7 +28,7 @@ export const SUMMARY_SYSTEM = `너는 Claude Code 작업 세션을 팀 리드용
    1. <기대 결과> 확인
 `;
 
-const NEXT_PROMPT_LIMIT = 2000;
+export const NEXT_PROMPT_LIMIT = 2000;
 export const nextTaskPrompt = (session, task) => {
     const pr = (session.prs || []).map(p => p.url).filter(Boolean)[0];
     const summary = session.report?.['한 줄 요약'] || '';
@@ -42,6 +43,24 @@ export const nextTaskPrompt = (session, task) => {
         .filter(l => l !== false && l !== null && l !== undefined)
         .join('\n');
     return text.slice(0, NEXT_PROMPT_LIMIT);
+};
+
+// 칠판 [시작] prompt. The marker line always comes first (it links the new session to the todo); when the
+// whole thing is over the limit, detail is what gets cut. `latest` = the todo's last linked session (a retry).
+export const todoPrompt = (todo, latest) => {
+    const pr = (latest?.prs || []).map(p => p.url).filter(Boolean)[0];
+    const summary = (latest?.report?.['한 줄 요약'] || '').replace(/\s+/g, ' ').trim();
+    const facts = [latest?.branch && `브랜치 ${latest.branch}`, pr && `PR ${pr}`, summary && `한 줄 요약: ${summary}`].filter(Boolean).join(', ');
+    const tail = [
+        `- 프로젝트: ${todo.folder}`,
+        latest && `- 이전 세션 "${latest.title}"${facts ? `: ${facts}` : ''}`,
+        '끝나면 결재 보고로 마무리해줘.',
+    ].filter(Boolean);
+    const head = markerLine(todo.id, todo.title);
+    const room = NEXT_PROMPT_LIMIT - [head, ...tail].join('\n').length - 1;
+    // slice counts UTF-16 units; drop a dangling high surrogate so an emoji is never half-cut.
+    const detail = room > 0 && todo.detail ? todo.detail.slice(0, room).replace(/[\uD800-\uDBFF]$/, '') : '';
+    return [head, detail, ...tail].filter(Boolean).join('\n').slice(0, NEXT_PROMPT_LIMIT);
 };
 
 export const newSessionLink = (folder, prompt) =>

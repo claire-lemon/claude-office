@@ -1,7 +1,7 @@
-// Transcript tail reading. No business decisions.
+// Transcript head/tail reading. No business decisions.
 import fs from 'node:fs';
 import path from 'node:path';
-import { HOME, TAIL_BYTES } from '../config.mjs';
+import { HOME, TAIL_BYTES, HEAD_BYTES } from '../config.mjs';
 
 export const transcriptPathFor = (cwd, cliSessionId) =>
     path.join(HOME, '.claude/projects', cwd.replace(/[^a-zA-Z0-9-]/g, '-'), `${cliSessionId}.jsonl`);
@@ -46,6 +46,31 @@ export const lastAssistantText = file => {
                 return t !== undefined ? t : coveredAll ? '' : undefined;
             }, undefined) || '';
             tailCache.set(file, { key, text });
+            return text;
+        } finally {
+            fs.closeSync(fd);
+        }
+    } catch {
+        return '';
+    }
+};
+
+// First HEAD_BYTES of a transcript (the first prompt sits there). Once the file has a full head it never
+// changes, so it is cached by path; a shorter file is re-read only when its size moves (the first prompt
+// line may not be written yet). Missing file -> ''.
+const headCache = new Map();
+export const firstPromptHead = file => {
+    const hit = headCache.get(file);
+    if (hit?.full) return hit.text;
+    try {
+        const { size } = fs.statSync(file);
+        if (hit && hit.size === size) return hit.text;
+        const fd = fs.openSync(file, 'r');
+        try {
+            const buf = Buffer.alloc(Math.min(size, HEAD_BYTES));
+            fs.readSync(fd, buf, 0, buf.length, 0);
+            const text = buf.toString('utf8');
+            headCache.set(file, { size, full: buf.length === HEAD_BYTES, text });
             return text;
         } finally {
             fs.closeSync(fd);
