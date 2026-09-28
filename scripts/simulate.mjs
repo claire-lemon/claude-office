@@ -67,7 +67,7 @@ if (!fs.existsSync(repo)) {
 }
 
 const repoDir = n => {
-    const dir = path.join(HOME, 'repos', `r${n}`);
+    const dir = path.join(HOME, 'repos', ['api-server', 'web-app', 'infra'][n]);
     fs.mkdirSync(dir, { recursive: true });
     return dir;
 };
