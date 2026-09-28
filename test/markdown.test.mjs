@@ -50,3 +50,8 @@ test('escapes HTML and refuses non-http links', () => {
 test('never hangs on odd input', () => {
     ['|---|', '```\nunclosed', '#nospace', '  - ', '*', '> '].forEach(s => assert.equal(typeof md(s), 'string'));
 });
+
+test('report style: numbered items with 3-space nested numbered children', () => {
+    const out = md('1. `a.ts:1` 수정\n2. 검증 완료\n   1. 단위 테스트로 검증\n   2. 로컬 API 처리\n3. 없음');
+    assert.equal(out, '<ol><li><code>a.ts:1</code> 수정</li><li>검증 완료<ol><li>단위 테스트로 검증</li><li>로컬 API 처리</li></ol></li><li>없음</li></ol>');
+});

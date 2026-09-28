@@ -561,7 +561,7 @@
   const countReviewItems = report => {
     const body = report && report['리뷰 필요'];
     if (!body) return 0;
-    return body.split('\n').filter(l => /^[-*]\s+/.test(l)).length; // top-level items only
+    return body.split('\n').filter(l => /^([-*]|\d+[.)])\s+/.test(l)).length; // top-level items only
   };
   // diffStat: {files, add, del} | null — only present for review/question sessions with a worktree.
   // A review with files===0 gets a "변경 없음" warning tag: a done report with no diff deserves a second look.

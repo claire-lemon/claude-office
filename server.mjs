@@ -13,13 +13,18 @@ const ORIGINS = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`];
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
 const SUMMARY_PROMPT = `아래는 Claude Code 작업 세션의 마지막 대화와 변경 통계다. 팀 리드가 결재할 수 있게 정확히 이 포맷으로만 한국어로 답하라.
+규칙: 모든 섹션은 번호 목록만 쓴다(문단/표/글머리 금지). 항목은 명사형으로 끝낸다(~ 수정, ~ 완료, ~ 확인 필요). 세부는 3칸 들여쓴 하위 번호 목록, 2단계까지. 파일은 \`경로:라인\`.
 ## 결재 보고
 ### 한 줄 요약
+1. <무엇을> <어떻게> 완료
 ### 리뷰 필요
-- \`파일:라인\` — 왜 봐야 하는지
+1. \`파일:라인\` <무엇> 확인 필요
+   1. <이유>
 ### 리스크 / 배포 의존성
+1. <리스크, 없으면 "없음">
 ### 테스트 방법
-1. ...
+1. <명령 또는 동작> 실행
+   1. <기대 결과> 확인
 `;
 
 const send = (res, code, body, type = 'application/json; charset=utf-8') => {

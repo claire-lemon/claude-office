@@ -22,21 +22,19 @@ const REPORT = `작업 끝났습니다.
 
 ## 결재 보고
 ### 한 줄 요약
-뷰에 **workspace$** 요약 객체 추가 (하위 호환 유지)
-
-| 항목 | 결과 |
-|---|---|
-| 단위 테스트 | ✅ 42 passed |
-| 로컬 API | ✅ \`http :8888/profile\` |
+1. 뷰에 \`workspace$\` 요약 객체 추가 완료
 ### 리뷰 필요
-- \`src/modules/profile/views.ts:42\` — 새 필드 노출 범위 확인
-- \`src/lib/profile/use-case.ts:88\` — N+1 조회 가능성
-  - [ ] workspace 캐시 적용 여부 확인
+1. \`src/modules/profile/views.ts:42\` 노출 필드 범위 확인 필요
+   1. id/name/stereo 외 필드 포함 여부
+2. \`src/lib/profile/use-case.ts:88\` N+1 조회 가능성 확인 필요
 ### 리스크 / 배포 의존성
-my-types 먼저 배포 후 API 배포
+1. my-types 선배포 필요
+   1. 타입 배포 → API 배포 순서
 ### 테스트 방법
-1. \`http :8888/profile\`
-2. workspace$ 필드 확인`;
+1. \`http :8888/profile\` 호출
+   1. \`workspace$\` 필드 존재 확인
+2. \`npm test\` 실행
+   1. 42개 통과 확인`;
 
 const hook = (id, event, cwd, transcript, message) =>
     execFileSync('node', [HOOK], {
