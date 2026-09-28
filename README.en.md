@@ -13,7 +13,7 @@ Design notes (Korean): [`docs/specs/2026-09-25-claude-office-design.md`](docs/sp
 
 - Zero dependencies (Node 22 standard library + `git`)
 - Binds to `127.0.0.1:7777` only
-- macOS only (uses the Claude desktop app's local files, `open`, and `pbcopy`)
+- macOS only (uses the Claude desktop app's local files, `open`, and `pbcopy`). Compatibility and verification status (Korean): [`docs/research/2026-09-28-compat-and-verification.md`](docs/research/2026-09-28-compat-and-verification.md)
 - The UI and the report format are in Korean
 
 ## Architecture

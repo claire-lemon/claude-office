@@ -13,6 +13,7 @@
 
 - 의존성 0개 (Node 22 표준 라이브러리 + `git`)
 - `127.0.0.1:7777` 전용
+- macOS 전용 (앱 로컬 파일, `open`, `pbcopy` 사용). 호환성·검증 상태: [`docs/research/2026-09-28-compat-and-verification.md`](docs/research/2026-09-28-compat-and-verification.md)
 
 ## 구조
 
