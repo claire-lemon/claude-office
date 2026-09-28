@@ -5,8 +5,8 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-    buildSessions, diffFor, readJson, writeJsonAtomic, lastAssistantText, CONFIRMED_FILE, SUMMARY_DIR,
-    CONFIRM_INSTRUCTION, nextTaskPrompt, newSessionLink,
+    buildSessions, diffFor, lastAssistantText, SUMMARY_DIR, CONFIRM_INSTRUCTION, nextTaskPrompt, newSessionLink,
+    saveDecision, clearDecision, loadDecisions, listArchived, oneLineSummary,
 } from './lib.mjs';
 
 const PORT = Number(process.env.OFFICE_PORT || 7777);
@@ -36,7 +36,7 @@ const send = (res, code, body, type = 'application/json; charset=utf-8') => {
 };
 
 const findSession = id => buildSessions().find(s => s.id === id);
-const markConfirmed = id => writeJsonAtomic(CONFIRMED_FILE, { ...readJson(CONFIRMED_FILE, {}), [id]: Date.now() });
+const markConfirmed = id => saveDecision(id, { kind: 'confirm', at: Date.now() });
 
 // OFFICE_DRY=1 (tests): report what would happen without touching the clipboard or the Claude app.
 const DRY = !!process.env.OFFICE_DRY;
@@ -77,9 +77,29 @@ const routes = {
         openLink(link);
         return send(res, 200, { ok: true, opened: link });
     },
-    'POST /api/unconfirm': (req, res, id) => {
-        const { [id]: _drop, ...rest } = readJson(CONFIRMED_FILE, {});
-        writeJsonAtomic(CONFIRMED_FILE, rest);
+    // Undo any lead decision (컨펌 취소 / 보류 해제).
+    'POST /api/undo': (req, res, id) => {
+        clearDecision(id);
+        return send(res, 200, { ok: true });
+    },
+    // Hold = park it in the 보류 column. No message, no side effects.
+    'POST /api/hold': (req, res, id) => {
+        if (!findSession(id)) return send(res, 404, { error: 'unknown session' });
+        saveDecision(id, { kind: 'hold', at: Date.now() });
+        return send(res, 200, { ok: true });
+    },
+    // Archive = drop it from the office and board; a snapshot keeps the 보관함 row readable later.
+    'POST /api/archive': (req, res, id) => {
+        const s = findSession(id);
+        if (!s) return send(res, 404, { error: 'unknown session' });
+        saveDecision(id, { kind: 'archive', at: Date.now(), title: s.title, summary: oneLineSummary(s), lastAt: s.lastAt });
+        return send(res, 200, { ok: true });
+    },
+    'GET /api/archived': (req, res) => send(res, 200, { archived: listArchived() }),
+    // Restore from 보관함 lands in 보류.
+    'POST /api/restore': (req, res, id) => {
+        if (loadDecisions()[id]?.kind !== 'archive') return send(res, 404, { error: 'not archived' });
+        saveDecision(id, { kind: 'hold', at: Date.now() });
         return send(res, 200, { ok: true });
     },
     'POST /api/open': (req, res, id) => {

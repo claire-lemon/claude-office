@@ -13,6 +13,7 @@ const lib = await import('../lib.mjs');
 const env = { ...process.env, OFFICE_HOME: HOME };
 const hook = input =>
     spawnSync('node', [path.join(ROOT, 'hooks/report.mjs')], { env, input: typeof input === 'string' ? input : JSON.stringify(input) });
+const TITLE_1 = '인프라 구조 정리';
 const stateOf = id => JSON.parse(fs.readFileSync(path.join(HOME, '.claude/office/state', `${id}.json`), 'utf8'));
 
 test('parseReport: block, missing block, missing sections', () => {
@@ -22,15 +23,19 @@ test('parseReport: block, missing block, missing sections', () => {
     assert.deepEqual(lib.parseReport('## 결재 보고\n'), {});
 });
 
-test('deriveStatus: every row of the mapping', () => {
+test('deriveStatus: every row of the mapping, decisions win until a newer event', () => {
     const s = (event, at = 10) => ({ event, at });
+    const d = (kind, at = 11) => ({ kind, at });
     assert.equal(lib.deriveStatus({ state: null }), 'unknown');
     assert.equal(lib.deriveStatus({ state: s('UserPromptSubmit') }), 'working');
     assert.equal(lib.deriveStatus({ state: s('Notification') }), 'blocked');
     assert.equal(lib.deriveStatus({ state: s('Stop'), hasReport: true }), 'review');
     assert.equal(lib.deriveStatus({ state: s('Stop'), hasReport: false }), 'question');
-    assert.equal(lib.deriveStatus({ state: s('Stop'), hasReport: true, confirmedAt: 11 }), 'done');
-    assert.equal(lib.deriveStatus({ state: s('UserPromptSubmit', 12), confirmedAt: 11 }), 'working');
+    assert.equal(lib.deriveStatus({ state: s('Stop'), hasReport: true, decision: d('confirm') }), 'done');
+    assert.equal(lib.deriveStatus({ state: s('Stop'), decision: d('hold') }), 'hold');
+    assert.equal(lib.deriveStatus({ state: s('Stop'), decision: d('archive') }), 'archived');
+    assert.equal(lib.deriveStatus({ state: null, decision: d('hold') }), 'hold');
+    assert.equal(lib.deriveStatus({ state: s('UserPromptSubmit', 12), decision: d('hold') }), 'working');
 });
 
 test('hook: silent, exit 0 on garbage, ignores idle Notification after Stop', () => {
@@ -139,6 +144,38 @@ test('server: confirm hands off instruction, next opens a prefilled new session 
         assert.match(n.opened, /^claude:\/\/code\/new\?q=.+&folder=/);
         assert.match(q, /할 일: 프론트\(my-web\)에서 `workspace\$` 표시/);
         assert.equal((await post('/api/next/local_1?index=9')).status, 404);
+    } finally {
+        server.kill();
+    }
+});
+
+test('hold / archive / restore through the server', async () => {
+    const { spawn } = await import('node:child_process');
+    const port = '7797';
+    const server = spawn('node', [path.join(ROOT, 'server.mjs')], { env: { ...env, OFFICE_DRY: '1', OFFICE_PORT: port } });
+    await new Promise(r => server.stdout.once('data', r));
+    const origin = `http://127.0.0.1:${port}`;
+    const post = p => fetch(`${origin}${p}`, { method: 'POST', headers: { origin } });
+    const sessions = () => fetch(`${origin}/api/sessions`).then(r => r.json()).then(j => j.sessions);
+    try {
+        assert.equal((await post('/api/hold/local_3')).status, 200);
+        assert.equal((await sessions()).find(s => s.id === 'local_3').status, 'hold');
+
+        assert.equal((await post('/api/archive/local_1')).status, 200);
+        assert.equal((await sessions()).some(s => s.id === 'local_1'), false);
+        const { archived } = await fetch(`${origin}/api/archived`).then(r => r.json());
+        const row = archived.find(a => a.id === 'local_1');
+        assert.equal(row.title, TITLE_1);
+        assert.match(row.summary, /workspace\$/);
+        assert.ok(row.lastAt);
+
+        assert.equal((await post('/api/restore/local_1')).status, 200);
+        assert.equal((await sessions()).find(s => s.id === 'local_1').status, 'hold');
+        assert.equal((await fetch(`${origin}/api/archived`).then(r => r.json())).archived.length, 0);
+        assert.equal((await post('/api/restore/local_1')).status, 404);
+
+        assert.equal((await post('/api/undo/local_1')).status, 200);
+        assert.equal((await sessions()).find(s => s.id === 'local_1').status, 'review');
     } finally {
         server.kill();
     }

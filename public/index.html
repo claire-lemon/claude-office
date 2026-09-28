@@ -37,7 +37,19 @@
   .counter .num{font-size:18px; font-weight:700;}
   .counter .label{font-size:11px; color:var(--muted);}
   #cnt-pending .num{color:var(--warn);}
-  #cnt-blocked .num{color:var(--bad);}
+  #cnt-hold .num{color:var(--muted);}
+  .icon-btn.archive-btn{width:auto; padding:0 12px; font-size:13px; white-space:nowrap;}
+  .archive-dialog{border:1px solid var(--line); border-radius:16px; padding:0; width:min(760px, 94vw); max-height:80vh; background:var(--bg-panel); color:var(--ink);}
+  .archive-dialog::backdrop{background:rgba(30,20,12,.38);}
+  .archive-head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px 6px; position:relative;}
+  .archive-head h2{font-size:16px; margin:0;}
+  .archive-head .panel-close{position:static;}
+  #archive-body{padding:0 16px 16px; overflow:auto; max-height:calc(80vh - 60px);}
+  .archive-table{width:100%; border-collapse:collapse; font-size:13px;}
+  .archive-table th,.archive-table td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top;}
+  .archive-table th{font-size:12px; color:var(--muted); font-weight:600;}
+  .archive-table td.at{white-space:nowrap; color:var(--muted);}
+  .archive-table td.sum{overflow-wrap:anywhere;}
   .icon-btn{background:var(--card); border:1px solid var(--line); border-radius:10px; width:38px; height:38px; font-size:16px; flex:none;}
 
   @media (max-width:640px){
@@ -123,6 +135,7 @@
   .kan-avatar svg{width:20px; height:28px; display:block; flex:none;}
   .kan-title{font-size:12px; font-weight:700; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .kan-tag{font-size:10px; padding:1px 6px; border-radius:8px; background:var(--accent); color:#fff; flex:none;}
+  .kan-tag.tag-danger{background:var(--bad);}
   .kan-meta{font-size:11px; color:var(--muted); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .kan-diffstat{font-size:11px; margin-top:2px; white-space:normal; overflow-wrap:break-word;}
   .kan-diffstat.hidden{display:none;}
@@ -182,7 +195,7 @@
   .toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:30; background:var(--ink); color:var(--bg-panel); padding:10px 16px; border-radius:12px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.18); max-width:90vw;}
   .act-btn{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px;}
   .act-btn:disabled{opacity:.6; cursor:default;}
-  .act-btn[data-action="confirm"],.act-btn[data-action="unconfirm"]{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .act-btn[data-action="confirm"]{background:var(--accent); color:#fff; border-color:var(--accent);}
   .stamp-layer{position:fixed; inset:0; z-index:5; display:flex; align-items:center; justify-content:center; pointer-events:none;}
   .stamp-fx{font-size:48px; font-weight:900; color:var(--bad); border:6px solid var(--bad); border-radius:12px; padding:4px 16px;
     transform:rotate(-8deg); animation:stamp-bang .9s ease-out forwards;}
@@ -194,8 +207,9 @@
   <div class="counters">
     <div class="counter" id="cnt-checkin"><span class="num">0</span><span class="label">출근</span></div>
     <div class="counter" id="cnt-pending"><span class="num">0</span><span class="label">결재 대기</span></div>
-    <div class="counter" id="cnt-blocked"><span class="num">0</span><span class="label">막힘</span></div>
+    <div class="counter" id="cnt-hold"><span class="num">0</span><span class="label">보류</span></div>
   </div>
+  <button id="archive-open" class="icon-btn archive-btn" type="button" title="보관함">🗄️ 보관함</button>
   <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" title="알림 소리">🔔</button>
 </header>
 <div class="stage">
@@ -229,7 +243,7 @@
       <div class="kan-columns">
         <div class="kan-col" data-col="working"><h3>작업 중</h3><div class="kan-list" id="col-working"></div></div>
         <div class="kan-col" data-col="pending"><h3>결재 대기</h3><div class="kan-list" id="col-pending"></div></div>
-        <div class="kan-col" data-col="blocked"><h3>막힘</h3><div class="kan-list" id="col-blocked"></div></div>
+        <div class="kan-col" data-col="hold"><h3>보류</h3><div class="kan-list" id="col-hold"></div></div>
         <div class="kan-col" data-col="done"><h3>완료</h3><div class="kan-list" id="col-done"></div></div>
       </div>
     </section>
@@ -379,6 +393,7 @@
     question: '<div class="bubble"><span class="b-icon">❓</span><span class="b-text">질문 있어요</span></div>',
     blocked: '<div class="bubble bubble-danger"><span class="b-icon">💦</span><span class="b-text">도와주세요</span></div>',
     done: '<div class="bubble"><span class="b-icon">☕<span class="steam s1"></span><span class="steam s2"></span></span><span class="b-text">완료</span></div>',
+    hold: '<div class="bubble"><span class="b-icon">⏸️</span><span class="b-text">보류</span></div>',
     unknown: '',
   };
 
@@ -542,14 +557,15 @@
   };
 
   // ---------- kanban ----------
-  const KAN_COLUMNS = ['working','pending','blocked','done'];
-  const colEl = { working:$('#col-working'), pending:$('#col-pending'), blocked:$('#col-blocked'), done:$('#col-done') };
+  const KAN_COLUMNS = ['working','pending','hold','done'];
+  const colEl = { working:$('#col-working'), pending:$('#col-pending'), hold:$('#col-hold'), done:$('#col-done') };
   const cardEls = new Map();
 
   const classifyColumn = s => {
     if (s.status === 'working') return 'working';
-    if (s.status === 'review' || s.status === 'question') return 'pending';
-    if (s.status === 'blocked') return 'blocked';
+    // blocked (permission/input needed) also waits on the lead, so it sits in 결재 대기 with a red tag.
+    if (s.status === 'review' || s.status === 'question' || s.status === 'blocked') return 'pending';
+    if (s.status === 'hold') return 'hold';
     if (s.status === 'done') return 'done';
     return null;
   };
@@ -585,6 +601,7 @@
     if (s.status === 'working') return s.eventAt ? `${elapsed(Date.now()-s.eventAt)} 경과` : '진행 중';
     if (s.status === 'question') return s.preview ? String(s.preview).slice(0,40) : '질문이 있어요';
     if (s.status === 'done') return `턴 ${s.turns ?? '-'} · 완료`;
+    if (s.status === 'hold') return s.eventAt ? `${elapsed(Date.now()-s.eventAt)} 전 마지막 활동` : '보류 중';
     return '';
   };
 
@@ -598,8 +615,10 @@
   const updateCard = (card, session) => {
     card.querySelector('.kan-title').textContent = session.title || '(제목 없음)';
     const tag = card.querySelector('.kan-tag');
-    const tagText = session.status === 'review' ? ((session.nextTasks || []).length ? '다음 작업' : '보고서') : session.status === 'question' ? '질문' : '';
+    const tagText = session.status === 'review' ? ((session.nextTasks || []).length ? '다음 작업' : '보고서')
+      : session.status === 'question' ? '질문' : session.status === 'blocked' ? '막힘' : '';
     tag.textContent = tagText;
+    tag.classList.toggle('tag-danger', session.status === 'blocked');
     tag.classList.toggle('hidden', !tagText);
     card.querySelector('.kan-meta').textContent = metaLine(session);
     const dsEl = card.querySelector('.kan-diffstat');
@@ -610,9 +629,10 @@
   };
 
   const renderKanban = sessions => {
-    const buckets = { working:[], pending:[], blocked:[], done:[] };
+    const buckets = { working:[], pending:[], hold:[], done:[] };
     sessions.forEach(s => { const c = classifyColumn(s); if (c) buckets[c].push(s); });
-    buckets.pending.sort((a,b) => (a.status==='review'?0:1) - (b.status==='review'?0:1));
+    const PENDING_ORDER = { blocked:0, review:1, question:2 };
+    buckets.pending.sort((a,b) => PENDING_ORDER[a.status] - PENDING_ORDER[b.status]);
     KAN_COLUMNS.forEach(col => {
       buckets[col].forEach(session => {
         const existing = cardEls.get(session.id);
@@ -708,7 +728,9 @@
     if (session.prs && session.prs.length) el.appendChild(actionBtn('PR 열기','pr'));
     const loading = summaryLoadingIds.has(session.id);
     el.appendChild(actionBtn(loading ? '생성 중... (최대 60초)' : '요약 만들기', 'summary', loading));
-    el.appendChild(actionBtn(session.status==='done' ? '컨펌 취소' : '컨펌 · 커밋·PR', session.status==='done' ? 'unconfirm' : 'confirm'));
+    el.appendChild(actionBtn(session.status==='done' ? '컨펌 취소' : '컨펌 · 커밋·PR', session.status==='done' ? 'undo' : 'confirm'));
+    el.appendChild(actionBtn(session.status==='hold' ? '보류 해제' : '보류', session.status==='hold' ? 'undo' : 'hold'));
+    el.appendChild(actionBtn('아카이브', 'archive'));
     (session.nextTasks || []).slice(0, 3).forEach((t, i) => {
       const b = actionBtn(i === 0 ? 'OK · 1번 진행' : `${i + 1}번 진행`, `next:${i}`);
       b.title = t.title;
@@ -812,7 +834,7 @@
   const flashPanelError = (msg, ms = 2500) => {
     const t = document.createElement('div');
     t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg;
-    document.body.appendChild(t);
+    (document.querySelector('dialog[open]') || document.body).appendChild(t); // a modal dialog covers body
     setTimeout(() => t.remove(), ms);
   };
   const stampFx = text => {
@@ -869,8 +891,24 @@
       flashPanelError('새 세션 입력창을 열었어요 · Enter만 누르세요', 6000);
     } catch {}
   };
-  const runUnconfirm = async id => {
-    try { const res = await fetch(`/api/unconfirm/${encodeURIComponent(id)}`, { method:'POST' }); if (res.ok) poll(); } catch {}
+  const postDecision = async (verb, id) => {
+    try { const res = await fetch(`/api/${verb}/${encodeURIComponent(id)}`, { method:'POST' }); if (res.ok) poll(); return res.ok; } catch { return false; }
+  };
+
+  // ---------- 보관함 ----------
+  const fmtDate = ms => ms ? new Date(ms).toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+  const renderArchive = list => {
+    $('#archive-body').innerHTML = list.length
+      ? `<table class="archive-table"><thead><tr><th>작업 이름</th><th>날짜</th><th>작업 한 줄 요약</th><th></th></tr></thead><tbody>${list.map(a => `<tr><td>${escapeHtml(a.title)}</td><td class="at">${escapeHtml(fmtDate(a.lastAt || a.archivedAt))}</td><td class="sum">${inlineMd(a.summary || '-')}</td><td><button type="button" class="act-btn restore-btn" data-id="${escapeHtml(a.id)}">복구</button></td></tr>`).join('')}</tbody></table>`
+      : '<p class="hint">보관한 작업이 없어요.</p>';
+  };
+  const loadArchive = async () => {
+    try { renderArchive((await fetch('/api/archived').then(r => r.json())).archived || []); }
+    catch { $('#archive-body').innerHTML = '<p class="hint">보관함을 불러오지 못했어요.</p>'; }
+  };
+  const openArchive = () => { $('#archive-dialog').showModal(); loadArchive(); };
+  const restoreArchived = async id => {
+    if (await postDecision('restore', id)) { flashPanelError('보류 칸으로 복구했어요'); loadArchive(); }
   };
 
   const handleAction = action => {
@@ -882,11 +920,17 @@
     else if (action === 'pr') { const url = session.prs && session.prs[0] && session.prs[0].url; if (url) window.open(url, '_blank', 'noopener'); }
     else if (action === 'summary') runSummary(id);
     else if (action === 'confirm') runConfirm(id);
-    else if (action === 'unconfirm') runUnconfirm(id);
+    else if (action === 'undo' || action === 'hold') postDecision(action, id);
+    else if (action === 'archive') postDecision('archive', id).then(ok => { if (ok) { closePanel(); flashPanelError('보관함으로 옮겼어요'); } });
     else if (action.startsWith('next:')) runNext(id, Number(action.slice(5)));
   };
 
   document.addEventListener('click', e => {
+    if (e.target.closest('#archive-open')) { openArchive(); return; }
+    if (e.target.closest('#archive-close')) { $('#archive-dialog').close(); return; }
+    if (e.target.id === 'archive-dialog') { $('#archive-dialog').close(); return; } // backdrop click
+    const restoreBtn = e.target.closest('.restore-btn');
+    if (restoreBtn) { restoreArchived(restoreBtn.dataset.id); return; }
     const deskEl = e.target.closest('.desk.occupied');
     if (deskEl) { selectSession(deskEl.dataset.id); return; }
     const cardEl = e.target.closest('.kan-card');
@@ -907,7 +951,7 @@
   const updateCounters = list => {
     $('#cnt-checkin .num').textContent = String(list.length);
     $('#cnt-pending .num').textContent = String(list.filter(s => s.status==='review'||s.status==='question').length);
-    $('#cnt-blocked .num').textContent = String(list.filter(s => s.status==='blocked').length);
+    $('#cnt-hold .num').textContent = String(list.filter(s => s.status==='hold').length);
   };
 
   // ---------- poll loop ----------
@@ -935,5 +979,9 @@
   setInterval(updateWindow, 30000);
 })();
 </script>
+<dialog id="archive-dialog" class="archive-dialog" aria-labelledby="archive-title">
+  <div class="archive-head"><h2 id="archive-title">보관함</h2><button type="button" class="panel-close" id="archive-close" aria-label="닫기">✕</button></div>
+  <div id="archive-body"></div>
+</dialog>
 </body>
 </html>

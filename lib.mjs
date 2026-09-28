@@ -10,6 +10,7 @@ export const OFFICE_DIR = path.join(HOME, '.claude/office');
 export const STATE_DIR = path.join(OFFICE_DIR, 'state');
 export const CONFIRMED_FILE = path.join(OFFICE_DIR, 'confirmed.json');
 export const SUMMARY_DIR = path.join(OFFICE_DIR, 'summaries');
+export const DECISIONS_FILE = path.join(OFFICE_DIR, 'decisions.json');
 
 const DAY = 24 * 60 * 60 * 1000;
 const MAX_DESKS = 10;
@@ -152,28 +153,68 @@ export const nextTaskPrompt = (session, task) => {
 export const newSessionLink = (folder, prompt) =>
     `claude://code/new?q=${encodeURIComponent(prompt)}&folder=${encodeURIComponent(folder)}`;
 
-export const deriveStatus =({ state, hasReport, confirmedAt }) => {
+// A session carries at most one lead decision: confirm | hold | archive. It applies until a newer hook event
+// (e.g. the user sends another prompt), so resumed work always comes back on its own.
+// confirmed.json is the pre-decisions format; still read so old confirms keep working.
+export const loadDecisions = () => ({
+    ...Object.fromEntries(Object.entries(readJson(CONFIRMED_FILE, {})).map(([id, at]) => [id, { kind: 'confirm', at }])),
+    ...readJson(DECISIONS_FILE, {}),
+});
+export const saveDecision = (id, decision) => writeJsonAtomic(DECISIONS_FILE, { ...readJson(DECISIONS_FILE, {}), [id]: decision });
+export const clearDecision = id => {
+    const { [id]: _d, ...decisions } = readJson(DECISIONS_FILE, {});
+    const { [id]: _c, ...confirmed } = readJson(CONFIRMED_FILE, {});
+    writeJsonAtomic(DECISIONS_FILE, decisions);
+    writeJsonAtomic(CONFIRMED_FILE, confirmed);
+};
+export const activeDecision = (decision, state) => (decision && decision.at > (state?.at || 0) ? decision.kind : null);
+
+const DECISION_STATUS = { confirm: 'done', hold: 'hold', archive: 'archived' };
+export const deriveStatus = ({ state, hasReport, decision }) => {
+    const active = activeDecision(decision, state);
+    if (active) return DECISION_STATUS[active];
     if (!state) return 'unknown';
-    if (confirmedAt && confirmedAt > state.at) return 'done';
     if (state.event === 'UserPromptSubmit') return 'working';
     if (state.event === 'Notification') return 'blocked';
     if (state.event === 'Stop') return hasReport ? 'review' : 'question';
     return 'unknown';
 };
 
+// One line for the archive list: the report's 한 줄 요약, else the start of the last reply.
+export const oneLineSummary = session =>
+    String(session.report?.['한 줄 요약'] || session.preview || session.lastMessage || '')
+        .split('\n')
+        .map(l => l.replace(/^\s*(?:\d+[.)]|[-*])\s+/, '').trim())
+        .find(Boolean)
+        ?.slice(0, 160) || '';
+
+// Archived sessions still archived (no newer activity), newest first.
+export const listArchived = () => {
+    const apps = loadAppSessions();
+    const byCli = new Map(apps.map(a => [a.cliSessionId, a.sessionId]));
+    const stateById = new Map(loadStates().map(st => [byCli.get(st.id) || st.id, st]));
+    return Object.entries(loadDecisions())
+        .filter(([id, d]) => d.kind === 'archive' && activeDecision(d, stateById.get(id)) === 'archive')
+        .map(([id, d]) => ({ id, title: d.title || id, archivedAt: d.at, lastAt: d.lastAt || null, summary: d.summary || '' }))
+        .sort((a, b) => b.archivedAt - a.archivedAt);
+};
+
 export const buildSessions = (now = Date.now()) => {
     const apps = loadAppSessions();
     const states = loadStates();
-    const confirmed = readJson(CONFIRMED_FILE, {});
+    const decisions = loadDecisions();
     const appByCli = new Map(apps.map(a => [a.cliSessionId, a]));
     const stateIds = new Set(states.map(s => s.id));
     const fromStates = states.map(state => ({ cli: state.id, state, app: appByCli.get(state.id) }));
-    const appOnly = apps
-        .filter(a => !stateIds.has(a.cliSessionId) && now - (a.lastActivityAt || 0) < DAY)
-        .map(app => ({ cli: app.cliSessionId, state: null, app }));
+    const appOnly = apps.filter(a => !stateIds.has(a.cliSessionId)).map(app => ({ cli: app.cliSessionId, state: null, app }));
     return [...fromStates, ...appOnly]
-        .map(({ cli, state, app }) => ({ cli, state, app, lastAt: Math.max(state?.at || 0, app?.lastActivityAt || 0) }))
-        .filter(s => now - s.lastAt < DAY && !s.app?.isArchived)
+        .map(({ cli, state, app }) => {
+            const id = app?.sessionId || cli;
+            const active = activeDecision(decisions[id], state);
+            return { cli, state, app, id, active, lastAt: Math.max(state?.at || 0, app?.lastActivityAt || 0) };
+        })
+        // Held sessions stay on the board past the 24h window; archived ones leave it (see listArchived).
+        .filter(s => (now - s.lastAt < DAY || s.active === 'hold') && s.active !== 'archive' && !s.app?.isArchived)
         .sort((a, b) => b.lastAt - a.lastAt)
         .slice(0, MAX_DESKS)
         .map(({ cli, state, app, lastAt }) => {
@@ -185,7 +226,7 @@ export const buildSessions = (now = Date.now()) => {
             const summary = fs.existsSync(path.join(SUMMARY_DIR, `${id}.md`))
                 ? fs.readFileSync(path.join(SUMMARY_DIR, `${id}.md`), 'utf8')
                 : null;
-            const status = deriveStatus({ state, hasReport: !!report, confirmedAt: confirmed[id] });
+            const status = deriveStatus({ state, hasReport: !!report, decision: decisions[id] });
             return {
                 id,
                 cli,
