@@ -22,7 +22,7 @@
   .desk.occupied{cursor:pointer;}
   .desk.occupied:hover{box-shadow:var(--shadow); transform:translateY(-1px);}
   .desk-visual{width:100%; aspect-ratio:64/86;}
-  .desk-visual svg{width:100%; height:100%; shape-rendering:crispEdges;}
+  .desk-visual svg{display:block; width:100%; height:100%; shape-rendering:crispEdges;}
   .nameplate{margin-top:2px; font-size:clamp(9px, calc(var(--desk-w, 104px) * .105), 13px); line-height:16px; font-weight:600; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:1px 6px; background:var(--bg); border-radius:6px;}
   /* nameplate and empty-label rows are both 20px tall (views/layout.js DESK_EXTRA relies on it) */
   .empty-label{font-size:clamp(9px, calc(var(--desk-w, 104px) * .105), 13px); line-height:16px; color:var(--muted); margin-top:4px;}
