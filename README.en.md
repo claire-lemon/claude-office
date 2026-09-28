@@ -12,6 +12,44 @@ Design notes (Korean): [`docs/specs/2026-09-25-claude-office-design.md`](docs/sp
 - macOS only (uses the Claude desktop app's local files, `open`, and `pbcopy`)
 - The UI and the report format are in Korean
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph APP["Claude desktop app"]
+        S["Work sessions<br/>one per worktree"]
+        NEW["New session input box"]
+    end
+
+    HOOK["hooks/report.mjs<br/>UserPromptSubmit · Notification · Stop"]
+
+    subgraph READ["Data the server reads"]
+        ST["~/.claude/office/state/*.json<br/>last event per session"]
+        META["App session metadata<br/>title · branch · PR · deep link"]
+        TR["Transcripts .jsonl<br/>last reply · approval report"]
+        GIT["git per worktree<br/>diff · branch · project"]
+    end
+
+    SRV["server.mjs + lib.mjs<br/>127.0.0.1:7777"]
+    DEC[("~/.claude/office/decisions.json<br/>confirm · hold · archive")]
+    UI["Browser<br/>pixel office · approval board<br/>detail panel · archive list"]
+
+    S -- "hook events" --> HOOK --> ST
+    ST --> SRV
+    META --> SRV
+    TR --> SRV
+    GIT --> SRV
+    SRV <--> DEC
+    SRV -- "/api/sessions every 2s" --> UI
+    UI -- "confirm · hold · archive · OK" --> SRV
+    SRV -. "confirm → copy + open chat<br/>(⌘V, Enter)" .-> S
+    SRV -. "OK → new-session deep link<br/>(Enter)" .-> NEW
+```
+
+- Session state comes from hook events; titles, branches, and deep links from the app's files; changes from each worktree's git.
+- The server writes only to `~/.claude/office/`. It only reads app data and session files.
+- Whenever something goes to a session (confirm, OK), you press the final Enter yourself.
+
 ## Try the demo first (touches no real settings)
 
 ```bash

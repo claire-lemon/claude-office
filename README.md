@@ -10,6 +10,44 @@
 - 의존성 0개 (Node 22 표준 라이브러리 + `git`)
 - `127.0.0.1:7777` 전용
 
+## 구조
+
+```mermaid
+flowchart TB
+    subgraph APP["Claude 데스크톱 앱"]
+        S["작업 세션들<br/>워크트리마다 하나"]
+        NEW["새 세션 입력창"]
+    end
+
+    HOOK["hooks/report.mjs<br/>UserPromptSubmit · Notification · Stop"]
+
+    subgraph READ["서버가 읽는 데이터"]
+        ST["~/.claude/office/state/*.json<br/>세션별 마지막 이벤트"]
+        META["앱 세션 메타데이터<br/>제목 · 브랜치 · PR · 딥링크"]
+        TR["대화 기록 .jsonl<br/>마지막 응답 · 결재 보고"]
+        GIT["워크트리 git<br/>diff · 브랜치 · 프로젝트"]
+    end
+
+    SRV["server.mjs + lib.mjs<br/>127.0.0.1:7777"]
+    DEC[("~/.claude/office/decisions.json<br/>컨펌 · 보류 · 아카이브")]
+    UI["브라우저<br/>픽셀 오피스 · 결재함<br/>상세 패널 · 보관함"]
+
+    S -- "훅 이벤트" --> HOOK --> ST
+    ST --> SRV
+    META --> SRV
+    TR --> SRV
+    GIT --> SRV
+    SRV <--> DEC
+    SRV -- "/api/sessions 2초마다" --> UI
+    UI -- "컨펌 · 보류 · 아카이브 · OK" --> SRV
+    SRV -. "컨펌 → 복사 + 채팅 열기<br/>(⌘V, Enter)" .-> S
+    SRV -. "OK → 새 세션 딥링크<br/>(Enter)" .-> NEW
+```
+
+- 세션 상태는 hooks가 남긴 이벤트로, 제목·브랜치·딥링크는 앱 파일에서, 변경사항은 각 워크트리의 git에서 읽는다.
+- 서버가 쓰는 곳은 `~/.claude/office/` 하나다. 앱 데이터와 세션 파일은 읽기만 한다.
+- 세션에 무언가를 보낼 때(컨펌, OK)는 마지막 Enter를 항상 사용자가 누른다.
+
 ## 먼저 데모로 보기 (실제 설정 안 건드림)
 
 ```bash
