@@ -76,19 +76,27 @@ export const getMeeting = (now = Date.now()) => {
     };
 };
 
-// Rebuilds the note's auto block (yesterday 00:00 onward + the 칠판 + folders) and keeps the rest.
-// Facilitator sessions are left out: they are meetings, not work.
-export const refreshNote = (now = Date.now()) => {
-    const date = localDate(now);
+// Work sessions active since yesterday 00:00, newest first: { view (board view, else lean, + todoTitle),
+// transcript, folder }. Facilitator sessions are left out: they are meetings, not work.
+export const recentWork = (now = Date.now()) => {
     const since = startOfYesterday(now);
     const board = new Map(listSessions(now).map(s => [s.id, s]));
     const stored = todosStore.load();
     const todoTitle = id => (id && Object.hasOwn(stored, id) ? stored[id].title : null);
-    const sessions = withMarkers()
+    return withMarkers()
         .filter(m => !m.meetingId && m.c.lastAt >= since)
         .sort((a, b) => b.c.lastAt - a.c.lastAt)
-        .map(m => board.get(m.c.id) ?? m.lean)
-        .map(s => ({ ...s, todoTitle: todoTitle(s.todoId) }));
+        .map(({ c, transcript, lean: leanView }) => {
+            const view = board.get(c.id) ?? leanView;
+            return { view: { ...view, todoTitle: todoTitle(view.todoId) }, transcript, folder: c.app?.originCwd || c.app?.cwd || c.state?.cwd || '' };
+        });
+};
+
+// Rebuilds the note's auto block (yesterday 00:00 onward + the 칠판 + folders) and keeps the rest.
+export const refreshNote = (now = Date.now()) => {
+    const date = localDate(now);
+    const since = startOfYesterday(now);
+    const sessions = recentWork(now).map(w => w.view);
     const { todos, folders } = listTodos(now);
     return notes.write(date, replaceAuto(notes.read(date), autoSection({ date, since, sessions, todos, folders }), date));
 };

@@ -33,3 +33,8 @@ export const TODO_FOLDERS_LIMIT = 20; // recent project folders offered by the t
 export const DIFF_FILE_LIMIT = 200 * 1024; // per-file patch bytes before tooLarge
 export const DIFF_TOTAL_LIMIT = 1024 * 1024; // total patch bytes before truncated
 export const DIFF_MAX_UNTRACKED = 30; // max untracked files rendered as added patches
+// 오늘 일지 AI 서술: written once a day after this local hour, so late-night work still counts as 어제.
+export const NARRATE_HOUR = 5;
+export const NARRATE_EVERY = 10 * 60 * 1000; // server check interval (a failed run retries on the next check)
+// The server timer runs for the real office only: fixture homes (tests, demo, metrics) never call the model.
+export const NARRATE_AUTO = !DRY && HOME === os.homedir();

@@ -15,7 +15,11 @@ export const ANIMAL_LABELS = {
 const TODO_MARK = { open: '☐', started: '◐', done: '☑' };
 export const AUTO_START = '<!-- office:auto:start -->';
 export const AUTO_END = '<!-- office:auto:end -->';
+export const NARRATIVE_START = '<!-- office:narrative:start -->';
+export const NARRATIVE_END = '<!-- office:narrative:end -->';
 const MESSAGE_LIMIT = 1200;
+const PROMPT_LIMIT = 800; // narrator input per session: the request's head
+const OUTCOME_LIMIT = 2000; // ...and the last reply's tail (결재 보고 sits at the end)
 
 const pad = n => String(n).padStart(2, '0');
 export const localDate = ms => {
@@ -70,19 +74,88 @@ export const autoSection = ({ since, sessions = [], todos = [], folders = [] }) 
         AUTO_END,
     ].join('\n');
 
+// The start..end marker block swapped for `block`; null when the doc has no such block.
+const swapBlock = (doc, start, end, block) => {
+    const s = doc.indexOf(start);
+    const e = s < 0 ? -1 : doc.indexOf(end, s);
+    return e < 0 ? null : doc.slice(0, s) + block + doc.slice(e + end.length);
+};
+// `block` as its own paragraph right after doc[0..at).
+const insertAt = (doc, at, block) => {
+    const rest = doc.slice(at).replace(/^\n+/, '');
+    return `${doc.slice(0, at)}\n\n${block}\n${rest ? `\n${rest}` : ''}`;
+};
+
 // Replace the marker block; else put it right after the first H1 (frontmatter + "# date"); else start a new
-// note from the skeleton. Text outside the markers (회의 n sections, hand notes) is kept as is.
+// note from the skeleton. Text outside the markers (AI 서술, 회의 n sections, hand notes) is kept as is.
 export const replaceAuto = (text, auto, date) => {
     const doc = text || '';
-    const start = doc.indexOf(AUTO_START);
-    const end = start < 0 ? -1 : doc.indexOf(AUTO_END, start);
-    if (end >= 0) return doc.slice(0, start) + auto + doc.slice(end + AUTO_END.length);
+    const swapped = swapBlock(doc, AUTO_START, AUTO_END, auto);
+    if (swapped !== null) return swapped;
     const h1 = doc.match(/^# .*$/m);
     if (!h1) return `${noteSkeleton(date)}\n${auto}\n${doc.trim() ? `\n${doc.trim()}\n` : ''}`;
-    const at = h1.index + h1[0].length;
-    const rest = doc.slice(at).replace(/^\n+/, '');
-    return `${doc.slice(0, at)}\n\n${auto}\n${rest ? `\n${rest}` : ''}`;
+    return insertAt(doc, h1.index + h1[0].length, auto);
 };
+
+// ── AI 서술 (daily-narrative design): the narrator's input, its section, where it sits in the note ──
+
+const head = (text, max) => [...String(text || '').trim()].slice(0, max).join('');
+const tail = (text, max) => {
+    const chars = [...String(text || '').trim()];
+    return chars.length > max ? `…${chars.slice(-max).join('')}` : chars.join('');
+};
+
+// session: a SessionView (or lean one) + folder, prompt (first request), outcome (last reply).
+const narrativeItem = (s, i) =>
+    [
+        `<session n="${i + 1}">`,
+        `제목: ${s.title}`,
+        `상태: ${STATUS_LABEL[s.status] ?? s.status} · 마지막 활동 ${localDate(s.lastAt)} ${hhmm(s.lastAt)}`,
+        s.folder && `폴더: ${s.folder}${s.branch ? ` (브랜치 ${s.branch})` : ''}`,
+        s.prs?.length && `PR: ${s.prs.map(p => p.url || `#${p.number}`).join(', ')}`,
+        s.diffStat && `변경: +${s.diffStat.add} −${s.diffStat.del} · ${s.diffStat.files}개 파일`,
+        s.todoTitle && `칠판 할 일: ${s.todoTitle}`,
+        `요청:\n${head(s.prompt, PROMPT_LIMIT) || '(없음)'}`,
+        `마지막 응답:\n${tail(s.outcome, OUTCOME_LIMIT) || '(없음)'}`,
+        '</session>',
+    ]
+        .filter(Boolean)
+        .join('\n');
+
+// Oldest first so the narrator reads the day in order (the auto block lists newest first).
+export const narrativeInput = ({ since, sessions }) =>
+    [
+        `기간: ${localDate(since)} ${hhmm(since)} 이후, 세션 ${sessions.length}개 (오래된 순)`,
+        '<sessions>',
+        ...[...sessions].sort((a, b) => a.lastAt - b.lastAt).map(narrativeItem),
+        '</sessions>',
+        '위 세션들로 업무일지의 어제 이야기를 써라.',
+    ].join('\n');
+
+// body = model output. Our markers in it would break the next splice and an H1/H2 would read as a note
+// section, so both are neutralised.
+export const narrativeSection = ({ at, since, count, body }) => {
+    const text = String(body || '').replace(/<!--\s*office:[^>]*-->/g, '').replace(/^#{1,2} /gm, '### ').trim();
+    return [
+        NARRATIVE_START,
+        `## 어제 이야기 (AI 서술 · ${localDate(since)} ${hhmm(since)} 이후 세션 ${count}개 · ${hhmm(at)} 작성)`,
+        text || '1. 없음',
+        NARRATIVE_END,
+    ].join('\n');
+};
+
+// Replace the block; else right after the auto block; else at the end (a note without an auto block).
+export const replaceNarrative = (text, section, date) => {
+    const doc = text || '';
+    const swapped = swapBlock(doc, NARRATIVE_START, NARRATIVE_END, section);
+    if (swapped !== null) return swapped;
+    const auto = doc.indexOf(AUTO_END);
+    if (auto >= 0) return insertAt(doc, auto + AUTO_END.length, section);
+    return appendSection(doc || noteSkeleton(date), section);
+};
+
+// Once a day: after `hour` (local) and only while the note has no AI 서술 yet.
+export const narrationDue = ({ now, text, hour }) => new Date(now).getHours() >= hour && !String(text || '').includes(NARRATIVE_START);
 
 export const meetingSection = ({ n, startedAt, endedAt, todos = [], lastMessage = '' }) => {
     const message = [...String(lastMessage || '').trim()].slice(0, MESSAGE_LIMIT).join('');

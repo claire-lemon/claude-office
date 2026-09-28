@@ -4,6 +4,7 @@
 // Always prints one JSON value; any failure exits 1 with { "error": "…" }.
 import { parseArgs } from 'node:util';
 import { listTodos, createTodo, updateTodo, deleteTodo, folders } from '../src/usecases/todos.mjs';
+import { narrateNote } from '../src/usecases/narrate.mjs';
 
 const USAGE = [
     'usage: node bin/office.mjs <command>',
@@ -12,6 +13,7 @@ const USAGE = [
     '  todo update <id> [--title "…"] [--detail "…"] [--folder /abs/path] [--done true|false]',
     '  todo delete <id>',
     '  folders',
+    '  narrate',
 ].join('\n');
 
 const OPTIONS = { title: { type: 'string' }, detail: { type: 'string' }, folder: { type: 'string' }, source: { type: 'string' }, done: { type: 'string' } };
@@ -33,6 +35,7 @@ const COMMANDS = {
     },
     'todo delete': { args: 1, options: [], run: ([id]) => deleteTodo(id) },
     folders: { args: 0, options: [], run: () => ({ folders: folders() }) },
+    narrate: { args: 0, options: [], run: () => narrateNote() },
 };
 
 const usageError = reason => ({ error: `${reason}\n${USAGE}` });
@@ -58,9 +61,9 @@ const run = argv => {
     return command.run(args, values);
 };
 
-const result = (() => {
+const result = await (async () => {
     try {
-        return run(process.argv.slice(2));
+        return await run(process.argv.slice(2));
     } catch (e) {
         return { error: String(e.message || e) };
     }

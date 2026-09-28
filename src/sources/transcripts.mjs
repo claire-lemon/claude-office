@@ -79,3 +79,21 @@ export const firstPromptHead = file => {
         return '';
     }
 };
+
+// The first real user prompt in the head: string content or text blocks, the app's <system-reminder> blocks
+// cut. Preamble lines (queue entries, attachments), tool results and a line cut at HEAD_BYTES yield ''.
+const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
+const promptOf = line => {
+    try {
+        const o = JSON.parse(line);
+        const c = o.type === 'user' && !o.isMeta ? o.message?.content : null;
+        const text = typeof c === 'string' ? c : Array.isArray(c) ? c.filter(b => b.type === 'text').map(b => b.text).join('\n') : '';
+        return text.replace(REMINDER, '').trim();
+    } catch {
+        return '';
+    }
+};
+export const firstPromptText = file => {
+    const line = firstPromptHead(file).split('\n').find(promptOf);
+    return line ? promptOf(line) : '';
+};

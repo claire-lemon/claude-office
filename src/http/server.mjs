@@ -2,9 +2,10 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PORT, PUBLIC_DIR } from '../config.mjs';
+import { PORT, PUBLIC_DIR, NARRATE_AUTO, NARRATE_EVERY } from '../config.mjs';
 import { routes, send } from './routes.mjs';
 import { installGuide } from '../usecases/meeting.mjs';
+import { narrateIfDue } from '../usecases/narrate.mjs';
 
 const ORIGINS = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`];
 const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
@@ -41,4 +42,14 @@ try {
     console.error(`facilitator guide not written: ${e.message}`);
 }
 
-server.listen(PORT, '127.0.0.1', () => console.log(`office open: http://127.0.0.1:${PORT}`));
+// 오늘 일지 AI 서술: checked at start and every NARRATE_EVERY while the server runs; written once a day after
+// NARRATE_HOUR (config NARRATE_AUTO says when the timer runs at all).
+// ponytail: in-process timer, so no 서술 while the server is off; the CLI `narrate` covers cron/launchd if needed.
+const narrate = () => narrateIfDue().catch(e => console.error(`narrative not written: ${e.message}`));
+
+server.listen(PORT, '127.0.0.1', () => {
+    console.log(`office open: http://127.0.0.1:${PORT}`);
+    if (!NARRATE_AUTO) return;
+    narrate();
+    setInterval(narrate, NARRATE_EVERY);
+});
