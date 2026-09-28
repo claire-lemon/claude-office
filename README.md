@@ -1,7 +1,7 @@
 # Claude Office
 
 병렬로 돌리는 Claude Code(데스크톱 앱) 세션을 픽셀 오피스로 관제하고, 결재함(칸반)에서 보고서·diff를 확인한 뒤 컨펌하는 로컬 대시보드.
-설계: [`../docs/superpowers/specs/2026-09-25-claude-office-design.md`](../docs/superpowers/specs/2026-09-25-claude-office-design.md)
+설계: [`docs/specs/2026-09-25-claude-office-design.md`](docs/specs/2026-09-25-claude-office-design.md)
 
 - 의존성 0개 (Node 22 표준 라이브러리 + `git`)
 - `127.0.0.1:7777` 전용
