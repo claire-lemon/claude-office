@@ -1,8 +1,14 @@
 import { $ } from '../lib/dom.js';
+import { seatCount, assignSeats } from '../lib/grid-math.js';
 import { ANIMALS, safeAnimal } from './sprites.js';
+import { refitOffice } from './layout.js';
+
+// Seats open `block` at a time (a full office opens the next block of empty desks) and a row holds
+// at most `maxPerRow` desks (views/layout.js picks block or maxPerRow columns, whichever fits larger).
+export const SEATS = { block: 5, maxPerRow: 10 };
 
 // ---------- desk / character svg ----------
-// viewBox is fixed (64x86) for every desk regardless of status, so all 10 desks render at an
+// viewBox is fixed (64x86) for every desk regardless of status, so all desks render at an
 // identical size; the character is drawn at 1.8x scale so the animal reads as the focal point.
 const emptyDeskSvg = () => `<svg viewBox="0 0 64 86">
   <rect x="20" y="30" width="24" height="34" rx="3" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 3"/>
@@ -72,35 +78,49 @@ const renderDesk = (el, session) => {
   el.querySelector('.bubble-slot').innerHTML = BUBBLE_HTML[session.status] || '';
 };
 
-// ---------- desk slot assignment (stable positions across polls) ----------
-const deskSlots = new Array(10).fill(null);
-const assignDesks = sessions => {
-  const idSet = new Set(sessions.map(s => s.id));
-  deskSlots.forEach((id,i) => { if (id && !idSet.has(id)) deskSlots[i] = null; });
-  const already = new Set(deskSlots.filter(Boolean));
-  sessions.forEach(s => {
-    if (already.has(s.id)) return;
-    const freeIdx = deskSlots.indexOf(null);
-    if (freeIdx !== -1) { deskSlots[freeIdx] = s.id; already.add(s.id); }
-  });
-};
-
+// ---------- seats (stable positions across polls) ----------
 const desksContainer = $('#desks');
-const deskEls = Array.from({length:10}, (_,i) => {
+const deskEls = [];
+const seats = { ids: [] }; // seat index -> session id | null, from the last unfiltered render
+const emptyHint = Object.assign(document.createElement('p'), { className: 'hint desks-empty', hidden: true, textContent: '해당하는 사원이 없어요' });
+desksContainer.append(emptyHint);
+
+const makeDesk = () => {
   const el = document.createElement('div');
   el.className = 'desk empty';
-  el.dataset.slot = String(i);
-  el.innerHTML = '<div class="desk-visual"></div><div class="nameplate"></div><div class="bubble-slot"></div><div class="empty-label">빈 자리</div>';
-  desksContainer.appendChild(el);
+  el.innerHTML = `<div class="desk-visual" data-empty="1">${emptyDeskSvg()}</div><div class="nameplate"></div><div class="bubble-slot"></div><div class="empty-label">빈 자리</div>`;
   return el;
-});
-deskEls.forEach(el => { el.querySelector('.desk-visual').innerHTML = emptyDeskSvg(); el.querySelector('.desk-visual').dataset.empty = '1'; });
-
-export const renderOffice = sessionsById => {
-  const list = Array.from(sessionsById.values());
-  assignDesks(list);
-  deskSlots.forEach((id,i) => renderDesk(deskEls[i], id ? sessionsById.get(id) : null));
 };
+
+// Grow/shrink the desk elements to `total`; returns whether the count changed.
+const syncDeskCount = total => {
+  const added = Array.from({ length: Math.max(total - deskEls.length, 0) }, makeDesk);
+  added.forEach(el => { el.dataset.slot = String(deskEls.length); deskEls.push(el); });
+  desksContainer.append(...added);
+  const removed = deskEls.splice(total);
+  removed.forEach(el => el.remove());
+  return added.length > 0 || removed.length > 0;
+};
+
+// Filtered view: only the given sessions, no empty seats, in their usual seat order. seats.ids is left
+// alone so clearing the filter puts everyone back where they sat.
+const filteredSlots = ids => {
+  const pos = new Map(seats.ids.map((id, i) => [id, i]));
+  const at = id => (pos.has(id) ? pos.get(id) : seats.ids.length);
+  return [...ids].sort((a, b) => at(a) - at(b));
+};
+
+export const renderOffice = (sessions, { showEmpty = true } = {}) => {
+  const byId = new Map(sessions.map(s => [s.id, s]));
+  const ids = sessions.map(s => s.id);
+  if (showEmpty) seats.ids = assignSeats(seats.ids, ids, seatCount(ids.length, SEATS.block));
+  const slots = showEmpty ? seats.ids : filteredSlots(ids);
+  const changed = syncDeskCount(slots.length);
+  slots.forEach((id, i) => renderDesk(deskEls[i], id ? byId.get(id) : null));
+  emptyHint.hidden = showEmpty || ids.length > 0;
+  if (changed) refitOffice();
+};
+renderOffice([]); // first empty block before the first poll, so the office never flashes empty
 
 // ---------- window day/night ----------
 export const updateWindow = () => {

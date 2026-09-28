@@ -12,9 +12,10 @@
   .window .mullion{stroke:var(--desk-edge); stroke-width:2;}
   .plant{width:28px; height:42px;}
 
-  /* ponytail: desks capped at 104px so 2 rows stay ~330px tall; the approval board is the main view */
-  .desks{flex:1; min-width:0; display:grid; grid-template-columns:repeat(5,minmax(0,104px)); justify-content:center; gap:8px;}
-  @media (min-width:1280px){ .desks{grid-template-columns:repeat(10,minmax(0,104px));} }
+  /* desk size and column count come from views/layout.js (fitGrid) via --desk-w / --desk-cols */
+  .desks{flex:1; min-width:0; display:grid; grid-template-columns:repeat(var(--desk-cols, 5), minmax(0, var(--desk-w, 104px))); justify-content:center; gap:8px;}
+  .desks-empty{grid-column:1 / -1; margin:0; padding:24px 0; text-align:center;}
+  @media (min-width:800px){ .office{margin-bottom:0; overflow-y:auto;} } /* min-size desks scroll inside the office */
   /* phones: no decor column, bubbles shrink to their icon so they don't cover the animals */
   @media (max-width:640px){ .office-decor{display:none;} .bubble .b-text,.bubble .b-paper{display:none;} }
   .desk{position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:6px 6px 8px; display:flex; flex-direction:column; align-items:center; min-width:0;}
@@ -22,13 +23,14 @@
   .desk.occupied:hover{box-shadow:var(--shadow); transform:translateY(-1px);}
   .desk-visual{width:100%; aspect-ratio:64/86;}
   .desk-visual svg{width:100%; height:100%; shape-rendering:crispEdges;}
-  .nameplate{margin-top:2px; font-size:11px; font-weight:600; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:1px 6px; background:var(--bg); border-radius:6px;}
-  .empty-label{font-size:11px; color:var(--muted); margin-top:6px;}
+  .nameplate{margin-top:2px; font-size:clamp(9px, calc(var(--desk-w, 104px) * .105), 13px); line-height:16px; font-weight:600; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:1px 6px; background:var(--bg); border-radius:6px;}
+  /* nameplate and empty-label rows are both 20px tall (views/layout.js DESK_EXTRA relies on it) */
+  .empty-label{font-size:clamp(9px, calc(var(--desk-w, 104px) * .105), 13px); line-height:16px; color:var(--muted); margin-top:4px;}
   .desk:not(.empty) .empty-label{display:none;}
   .desk.empty .nameplate,.desk.empty .bubble-slot{display:none;}
   .char-group.grayscale{filter:grayscale(1) opacity(.55);}
   .bubble-slot{position:absolute; top:-6px; left:0; right:0; z-index:2; display:flex; justify-content:flex-end; padding-right:2px; min-width:0;}
-  .bubble{display:flex; flex-wrap:wrap; align-items:center; gap:3px; max-width:100%; min-width:0; background:var(--bubble-bg); border:1px solid var(--line); border-radius:10px; padding:2px 6px; font-size:10px; box-shadow:var(--shadow); white-space:normal; overflow-wrap:break-word; line-height:1.25;}
+  .bubble{display:flex; flex-wrap:wrap; align-items:center; gap:3px; max-width:100%; min-width:0; background:var(--bubble-bg); border:1px solid var(--line); border-radius:10px; padding:2px 6px; font-size:clamp(8px, calc(var(--desk-w, 104px) * .095), 12px); box-shadow:var(--shadow); white-space:normal; overflow-wrap:break-word; line-height:1.25;}
   .bubble-danger{background:var(--bubble-danger);}
   .b-text{color:var(--ink); min-width:0;}
   .bubble-danger .b-text{color:var(--bad); font-weight:700;}

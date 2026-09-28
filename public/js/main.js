@@ -2,6 +2,7 @@ import { $ } from './lib/dom.js';
 import * as api from './api.js';
 import { state, selected, controls } from './store.js';
 import * as office from './views/office.js';
+import * as layout from './views/layout.js';
 import * as board from './views/board.js';
 import * as notify from './views/notify.js';
 import * as archive from './views/archive.js';
@@ -36,7 +37,7 @@ document.addEventListener('keydown', e => {
 // ---------- poll loop ----------
 const applySessions = list => {
   state.sessionsById = new Map(list.map(s => [s.id, s]));
-  office.renderOffice(state.sessionsById);
+  office.renderOffice(list);
   board.renderKanban(list);
   board.updateCounters(list);
   panel.updatePanelOnPoll();
@@ -66,6 +67,7 @@ const openFromUrl = () => {
   if (params.get('tab') === 'diff') panel.setTab('diff');
 };
 
+layout.initLayout({ seats: office.SEATS });
 office.updateWindow();
 poll();
 setInterval(poll, 2000);

@@ -1,11 +1,26 @@
 /* board.css: 결재함 kanban columns and cards */
   .kanban{background:var(--bg-panel); border:1px solid var(--line); border-radius:16px; padding:14px; min-width:0;}
   .kan-columns{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:8px;}
-  @media (max-width:800px){ .kan-columns{grid-template-columns:repeat(2,minmax(0,1fr));} }
+  @media (max-width:799.98px){ .kan-columns{grid-template-columns:repeat(2,minmax(0,1fr));} }
   @media (max-width:520px){ .kan-columns{grid-template-columns:minmax(0,1fr);} }
   .kan-col{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; min-height:120px; min-width:0;}
   .kan-col h3{font-size:12px; color:var(--muted); text-transform:none;}
   .kan-list{display:flex; flex-direction:column; gap:6px; min-height:24px; min-width:0;}
+  /* ≥800px: column widths from views/layout.js (--kan-cols), board fills its row, lists scroll inside */
+  @media (min-width:800px){
+    .kanban{display:flex; flex-direction:column; min-height:0;}
+    .kan-columns{flex:1; min-height:0; grid-template-columns:var(--kan-cols, repeat(4,minmax(0,1fr))); grid-template-rows:minmax(0,1fr);}
+    .kan-col{position:relative; display:flex; flex-direction:column;}
+    .kan-list{flex:1; min-height:0; overflow-y:auto; padding:2px; margin:-2px;} /* padding keeps the .selected outline unclipped */
+  }
+  .kanban.single .kan-columns{grid-template-columns:minmax(0,1fr);}
+  /* column width handle: sits in the 10px gap right of each column but the last */
+  .col-handle{display:none;}
+  @media (min-width:800px){
+    .col-handle{display:block; position:absolute; top:0; bottom:0; right:-10px; width:8px; z-index:1; border-radius:4px; cursor:ew-resize; touch-action:none; outline:none; transition:background-color .15s ease;}
+    .col-handle:hover,.col-handle:focus-visible{background:var(--accent); transition-delay:.3s;}
+  }
+  .kanban.single .col-handle{display:none;}
   .kan-card{background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:6px 8px; cursor:pointer; min-width:0;}
   .kan-card:hover{box-shadow:var(--shadow);}
   .kan-card.selected{outline:2px solid var(--accent);}

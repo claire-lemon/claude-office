@@ -1,4 +1,4 @@
-/* base.css: color tokens (incl. dark mode), resets, header/topbar, page layout, 보관함 dialog chrome, shared .hint text */
+/* base.css: color tokens (incl. dark mode), resets, header/topbar, page layout + office↔board split handle, 보관함 dialog chrome, shared .hint text */
   :root{
     --bg:#faf3e8; --bg-panel:#fffaf2; --card:#ffffff; --ink:#4a3b2f; --muted:#9c8b7c;
     --line:#ecdfcc; --accent:#ff9eb0; --desk:#d8b88a; --desk-edge:#c7a374;
@@ -56,5 +56,18 @@
   .stage{display:flex; gap:16px; padding:16px 20px 40px; align-items:flex-start; min-width:0; transition:margin-right .2s ease;}
   @media (min-width:1400px){ body.panel-open .stage{margin-right:var(--panel-w, 380px);} }
   .main-col{flex:1; min-width:0; display:flex; flex-direction:column; gap:18px;}
+  /* ≥800px: the page fits the viewport; office / split handle / board share .main-col's height and
+     the board columns scroll inside (views/layout.js sets --office-h). Below that the page flows. */
+  body.resizing{user-select:none;}
+  .split-y{display:none;}
+  @media (min-width:800px){
+    body{height:100vh; height:100dvh; display:flex; flex-direction:column;}
+    .topbar{flex:none;}
+    .stage{flex:1; min-height:0; align-items:stretch; padding-bottom:16px;}
+    .main-col{display:grid; grid-template-rows:var(--office-h, 300px) 16px minmax(0,1fr); gap:0;}
+    .split-y{display:block; position:relative; cursor:ns-resize; touch-action:none; outline:none;}
+    .split-y::before{content:''; position:absolute; left:50%; top:50%; width:48px; height:4px; transform:translate(-50%,-50%); border-radius:2px; background:var(--line); transition:background-color .15s ease;}
+    .split-y:hover::before,.split-y:focus-visible::before{background:var(--accent);}
+  }
 
   .hint{font-size:12px; color:var(--muted);}
