@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HOME } from './lib.mjs';
+import { HOME } from './src/config.mjs';
 
 const SETTINGS = path.join(HOME, '.claude/settings.json');
 const HOOK = path.join(path.dirname(fileURLToPath(import.meta.url)), 'hooks/report.mjs');

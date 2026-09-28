@@ -42,7 +42,7 @@ for (const _ of Array.from({ length: 50 })) {
 }
 server.kill();
 
-const noApp = spawnSync('node', ['-e', "import('./lib.mjs').then(l => l.buildSessions())"], {
+const noApp = spawnSync('node', ['-e', "import('./src/usecases/list-sessions.mjs').then(l => l.listSessions())"], {
     cwd: ROOT,
     env: { ...env, OFFICE_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'office-empty-')), OFFICE_APP_DIR: '/nonexistent' },
 });

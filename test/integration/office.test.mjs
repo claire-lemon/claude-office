@@ -6,37 +6,17 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'office-test-'));
 process.env.OFFICE_HOME = HOME;
-const lib = await import('../lib.mjs');
+const { listSessions } = await import('../../src/usecases/list-sessions.mjs');
+const { getChanges } = await import('../../src/usecases/get-changes.mjs');
+const { gitInfo } = await import('../../src/sources/git.mjs');
 const env = { ...process.env, OFFICE_HOME: HOME };
 const hook = input =>
     spawnSync('node', [path.join(ROOT, 'hooks/report.mjs')], { env, input: typeof input === 'string' ? input : JSON.stringify(input) });
 const TITLE_1 = '인프라 구조 정리';
 const stateOf = id => JSON.parse(fs.readFileSync(path.join(HOME, '.claude/office/state', `${id}.json`), 'utf8'));
-
-test('parseReport: block, missing block, missing sections', () => {
-    const r = lib.parseReport('앞말\n## 결재 보고\n### 한 줄 요약\n요약\n### 리뷰 필요\n- a.ts:1 — 이유\n## 다른 섹션\nx');
-    assert.deepEqual(r, { '한 줄 요약': '요약', '리뷰 필요': '- a.ts:1 — 이유' });
-    assert.equal(lib.parseReport('그냥 답변'), null);
-    assert.deepEqual(lib.parseReport('## 결재 보고\n'), {});
-});
-
-test('deriveStatus: every row of the mapping, decisions win until a newer event', () => {
-    const s = (event, at = 10) => ({ event, at });
-    const d = (kind, at = 11) => ({ kind, at });
-    assert.equal(lib.deriveStatus({ state: null }), 'unknown');
-    assert.equal(lib.deriveStatus({ state: s('UserPromptSubmit') }), 'working');
-    assert.equal(lib.deriveStatus({ state: s('Notification') }), 'blocked');
-    assert.equal(lib.deriveStatus({ state: s('Stop'), hasReport: true }), 'review');
-    assert.equal(lib.deriveStatus({ state: s('Stop'), hasReport: false }), 'question');
-    assert.equal(lib.deriveStatus({ state: s('Stop'), hasReport: true, decision: d('confirm') }), 'done');
-    assert.equal(lib.deriveStatus({ state: s('Stop'), decision: d('hold') }), 'hold');
-    assert.equal(lib.deriveStatus({ state: s('Stop'), decision: d('archive') }), 'archived');
-    assert.equal(lib.deriveStatus({ state: null, decision: d('hold') }), 'hold');
-    assert.equal(lib.deriveStatus({ state: s('UserPromptSubmit', 12), decision: d('hold') }), 'working');
-});
 
 test('hook: silent, exit 0 on garbage, ignores idle Notification after Stop', () => {
     const bad = hook('not json');
@@ -56,7 +36,7 @@ test('hook: silent, exit 0 on garbage, ignores idle Notification after Stop', ()
 
 test('buildSessions + diff on simulated office', () => {
     execFileSync('node', [path.join(ROOT, 'scripts/simulate.mjs'), '--once'], { env });
-    const sessions = lib.buildSessions();
+    const sessions = listSessions();
     assert.equal(sessions.length, 10);
     const byId = Object.fromEntries(sessions.map(s => [s.id, s]));
     assert.equal(byId.local_0.status, 'working');
@@ -65,27 +45,17 @@ test('buildSessions + diff on simulated office', () => {
     assert.equal(byId.local_2.status, 'blocked');
     assert.equal(byId.local_3.status, 'question');
     assert.equal(byId.local_0.link, 'claude://claude.ai/epitaxy/local_0');
-    const d = lib.diffFor(byId.local_0);
+    const d = getChanges(byId.local_0);
     assert.equal(d.tracked, true);
     assert.deepEqual(d.files.map(f => f.path), ['views.ts']);
     assert.deepEqual(d.untracked, ['new-file.md']);
-    assert.equal(lib.diffFor(byId.local_1).tracked, false);
-    assert.deepEqual(lib.gitInfo(path.join(HOME, 'repo')), { project: 'repo', branch: 'feat/x' });
+    assert.equal(getChanges(byId.local_1).tracked, false);
+    assert.deepEqual(gitInfo(path.join(HOME, 'repo')), { project: 'repo', branch: 'feat/x' });
     assert.equal(byId.local_0.cwd.endsWith('/repo'), true);
     assert.equal(byId.local_0.diffStat, null);
     hook({ session_id: 'cli-0', hook_event_name: 'Stop' });
-    const stopped = lib.buildSessions().find(s => s.id === 'local_0');
+    const stopped = listSessions().find(s => s.id === 'local_0');
     assert.deepEqual(stopped.diffStat, { files: 1, add: 1, del: 0 });
-});
-
-test('buildSessions survives a missing app dir (hook-only sessions)', () => {
-    const home2 = fs.mkdtempSync(path.join(os.tmpdir(), 'office-noapp-'));
-    const out = execFileSync(
-        'node',
-        ['-e', "import('./lib.mjs').then(l => console.log(JSON.stringify(l.buildSessions().map(s => [s.title, s.status]))))"],
-        { cwd: ROOT, env: { ...env, OFFICE_HOME: home2, OFFICE_APP_DIR: path.join(home2, 'nope') } },
-    );
-    assert.equal(out.toString().trim(), '[]');
 });
 
 test('install is idempotent, keeps foreign hooks, uninstall removes only ours', () => {
@@ -100,26 +70,6 @@ test('install is idempotent, keeps foreign hooks, uninstall removes only ours', 
     assert.equal(installed.hooks.UserPromptSubmit.length, 1);
     run('--uninstall');
     assert.deepEqual(JSON.parse(fs.readFileSync(settings, 'utf8')), foreign);
-});
-
-test('parseTasks + nextTaskPrompt + newSessionLink', () => {
-    const tasks = lib.parseTasks('1. 타입 배포\n   1. 선배포 필요\n2. 프론트 표시\n3. 캐시 적용');
-    assert.deepEqual(tasks, [
-        { title: '타입 배포', detail: '선배포 필요' },
-        { title: '프론트 표시', detail: '' },
-        { title: '캐시 적용', detail: '' },
-    ]);
-    assert.deepEqual(lib.parseTasks(undefined), []);
-    const prompt = lib.nextTaskPrompt(
-        { title: '뷰 확장', branch: 'feat/x', prs: [{ url: 'https://github.com/a/b/pull/1' }], report: { '한 줄 요약': '1. 추가 완료' } },
-        tasks[0],
-    );
-    assert.match(prompt, /이전 세션 "뷰 확장"/);
-    assert.match(prompt, /PR: https:\/\/github.com\/a\/b\/pull\/1/);
-    assert.match(prompt, /할 일: 타입 배포\n선배포 필요$/);
-    assert.equal(lib.nextTaskPrompt({ title: 't' }, { title: 'x'.repeat(5000), detail: '' }).length, 2000);
-    const link = lib.newSessionLink('/a b/repo', '할 일 & ok');
-    assert.equal(link, 'claude://code/new?q=%ED%95%A0%20%EC%9D%BC%20%26%20ok&folder=%2Fa%20b%2Frepo');
 });
 
 test('server: confirm hands off instruction, next opens a prefilled new session (dry run)', async () => {
@@ -228,34 +178,6 @@ test('hook does nothing when OFFICE_SKIP_HOOK is set', () => {
     assert.ok(!fs.existsSync(path.join(HOME, '.claude/office/state', 'skipme.json')));
 });
 
-test('lastAssistantText finds a last reply bigger than the tail window', () => {
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'office-big-')), 't.jsonl');
-    const line = text => `${JSON.stringify({ type: 'assistant', isSidechain: false, message: { role: 'assistant', content: [{ type: 'text', text }] } })}\n`;
-    const big = `## 결재 보고\n### 한 줄 요약\n1. 큰 보고 완료\n${'x'.repeat(300 * 1024)}`;
-    fs.writeFileSync(file, line('## 결재 보고\n### 한 줄 요약\n1. 예전 보고') + line(big));
-    const text = lib.lastAssistantText(file);
-    assert.equal(text.length, big.length);
-    assert.equal(lib.parseReport(text)['한 줄 요약'].split('\n')[0], '1. 큰 보고 완료');
-});
-
-test('held sessions keep a desk even when 10 fresher sessions exist', () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'office-hold-'));
-    const stateDir = path.join(home, '.claude/office/state');
-    fs.mkdirSync(stateDir, { recursive: true });
-    const now = Date.now();
-    const put = (id, at) => fs.writeFileSync(path.join(stateDir, `${id}.json`), JSON.stringify({ event: 'Stop', at }));
-    put('old-held', now - 40 * 3600 * 1000);
-    Array.from({ length: 10 }, (_, i) => put(`fresh-${i}`, now - i * 1000));
-    fs.writeFileSync(path.join(home, '.claude/office/decisions.json'), JSON.stringify({ 'old-held': { kind: 'hold', at: now - 39 * 3600 * 1000 } }));
-    const out = execFileSync('node', ['-e', "import('./lib.mjs').then(l => console.log(JSON.stringify(l.buildSessions().map(s => [s.id, s.status]))))"], {
-        cwd: ROOT,
-        env: { ...process.env, OFFICE_HOME: home, OFFICE_APP_DIR: path.join(home, 'none') },
-    });
-    const rows = JSON.parse(out.toString());
-    assert.equal(rows.length, 10);
-    assert.deepEqual(rows.find(r => r[0] === 'old-held'), ['old-held', 'hold']);
-});
-
 test('server rejects foreign Host headers on GET (DNS rebinding)', async () => {
     const { spawn } = await import('node:child_process');
     const http = await import('node:http');
@@ -283,8 +205,8 @@ test('a summary is hidden once the session has a newer event', () => {
     fs.writeFileSync(file, '## 결재 보고\n### 한 줄 요약\n1. 예전 요약');
     const old = new Date(Date.now() - 60 * 60 * 1000);
     fs.utimesSync(file, old, old);
-    assert.equal(lib.buildSessions().find(s => s.id === 'local_4').summary, null);
+    assert.equal(listSessions().find(s => s.id === 'local_4').summary, null);
     const future = new Date(Date.now() + 60 * 1000);
     fs.utimesSync(file, future, future);
-    assert.match(lib.buildSessions().find(s => s.id === 'local_4').summary, /예전 요약/);
+    assert.match(listSessions().find(s => s.id === 'local_4').summary, /예전 요약/);
 });

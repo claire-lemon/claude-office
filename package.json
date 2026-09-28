@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test --test-timeout=30000 \"test/**/*.test.mjs\"",
     "demo": "node scripts/demo.mjs"
   }
 }
