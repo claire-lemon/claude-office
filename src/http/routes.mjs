@@ -5,6 +5,9 @@ import { getChanges } from '../usecases/get-changes.mjs';
 import * as decide from '../usecases/decide.mjs';
 import { startNextTask } from '../usecases/next-task.mjs';
 import { summarize } from '../usecases/summarize.mjs';
+import { moveSession } from '../usecases/move.mjs';
+import { editSession } from '../usecases/edit-session.mjs';
+import { readJsonBody } from './body.mjs';
 
 export const send = (res, code, body, type = 'application/json; charset=utf-8') => {
     res.writeHead(code, { 'content-type': type, 'cache-control': 'no-store' });
@@ -63,5 +66,22 @@ export const routes = {
         summarize(s)
             .then(out => send(res, 200, { summary: out }))
             .catch(() => send(res, 502, { error: '요약 생성 실패' }));
+    },
+    // 결재함 drag: ?to=<column>. 409 carries the allowed moves so the board can resync.
+    'POST /api/move': (req, res, id, url) => {
+        const s = findSession(id);
+        if (!s) return send(res, 404, { error: 'unknown session' });
+        const result = moveSession(s, url.searchParams.get('to'));
+        if (result.error) return send(res, 409, { error: result.error, moves: s.moves });
+        return send(res, 200, result);
+    },
+    'POST /api/edit': async (req, res, id) => {
+        const body = await readJsonBody(req);
+        if (!body.ok) return send(res, body.code, { error: body.error });
+        const s = findSession(id);
+        if (!s) return send(res, 404, { error: 'unknown session' });
+        const result = editSession(s, body.value);
+        if (result.error) return send(res, 400, { error: result.error });
+        return send(res, 200, result);
     },
 };

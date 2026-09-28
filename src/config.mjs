@@ -13,13 +13,14 @@ export const STATE_DIR = path.join(OFFICE_DIR, 'state');
 export const CONFIRMED_FILE = path.join(OFFICE_DIR, 'confirmed.json');
 export const SUMMARY_DIR = path.join(OFFICE_DIR, 'summaries');
 export const DECISIONS_FILE = path.join(OFFICE_DIR, 'decisions.json');
+export const OVERRIDES_FILE = path.join(OFFICE_DIR, 'overrides.json');
 
 export const PORT = Number(process.env.OFFICE_PORT || 7777);
 export const PUBLIC_DIR = path.join(ROOT, process.env.OFFICE_PUBLIC || 'public');
 export const DRY = !!process.env.OFFICE_DRY;
 
 export const DAY = 24 * 60 * 60 * 1000;
-export const MAX_DESKS = 10;
+export const MAX_DESKS = 20;
 export const TAIL_BYTES = 256 * 1024;
 export const DIFF_FILE_LIMIT = 200 * 1024; // per-file patch bytes before tooLarge
 export const DIFF_TOTAL_LIMIT = 1024 * 1024; // total patch bytes before truncated

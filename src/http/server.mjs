@@ -9,6 +9,8 @@ const ORIGINS = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`];
 const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
+const fail = (res, e) => (res.headersSent ? res.destroy() : send(res, 500, { error: String(e.message || e) }));
+
 const server = http.createServer((req, res) => {
     try {
         const url = new URL(req.url, ORIGINS[0]);
@@ -18,13 +20,14 @@ const server = http.createServer((req, res) => {
         if (req.method === 'POST' && !ORIGINS.includes(req.headers.origin)) return send(res, 403, { error: 'bad origin' });
         const [, , name, id = ''] = url.pathname.split('/');
         const route = url.pathname.startsWith('/api/') && routes[`${req.method} /api/${name}`];
-        if (route) return route(req, res, decodeURIComponent(id), url);
+        // Handlers may be async; the catch below only sees sync throws.
+        if (route) return Promise.resolve(route(req, res, decodeURIComponent(id), url)).catch(e => fail(res, e));
         if (req.method !== 'GET') return send(res, 405, { error: 'method' });
         const file = path.join(PUBLIC_DIR, url.pathname === '/' ? 'index.html' : path.normalize(url.pathname));
         if (!file.startsWith(PUBLIC_DIR) || !fs.existsSync(file)) return send(res, 404, 'not found', 'text/plain');
         return send(res, 200, fs.readFileSync(file), TYPES[path.extname(file)] || 'application/octet-stream');
     } catch (e) {
-        return send(res, 500, { error: String(e.message || e) });
+        return fail(res, e);
     }
 });
 

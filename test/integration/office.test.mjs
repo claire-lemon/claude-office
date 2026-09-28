@@ -37,7 +37,8 @@ test('hook: silent, exit 0 on garbage, ignores idle Notification after Stop', ()
 test('buildSessions + diff on simulated office', () => {
     execFileSync('node', [path.join(ROOT, 'scripts/simulate.mjs'), '--once'], { env });
     const sessions = listSessions();
-    assert.equal(sessions.length, 10);
+    // The hook test above leaves state-only sessions too; the old 10-desk cap used to hide them.
+    assert.equal(sessions.filter(s => s.id.startsWith('local_')).length, 10);
     const byId = Object.fromEntries(sessions.map(s => [s.id, s]));
     assert.equal(byId.local_0.status, 'working');
     assert.equal(byId.local_1.status, 'review');
@@ -128,6 +129,80 @@ test('hold / archive / restore through the server', async () => {
 
         assert.equal((await post('/api/undo/local_1')).status, 200);
         assert.equal((await sessions()).find(s => s.id === 'local_1').status, 'review');
+    } finally {
+        server.kill();
+    }
+});
+
+test('server: board moves (hold -> done -> undo) and title edits', async () => {
+    const { spawn } = await import('node:child_process');
+    const port = '7794';
+    const server = spawn('node', [path.join(ROOT, 'server.mjs')], { env: { ...env, OFFICE_DRY: '1', OFFICE_PORT: port } });
+    await new Promise(r => server.stdout.once('data', r));
+    const origin = `http://127.0.0.1:${port}`;
+    const post = (p, init = {}) => fetch(`${origin}${p}`, { method: 'POST', ...init, headers: { origin, ...init.headers } });
+    const move = (id, to) => post(`/api/move/${id}?to=${to}`);
+    const edit = (id, body, headers = { 'content-type': 'application/json' }) =>
+        post(`/api/edit/${id}`, { headers, body: typeof body === 'string' ? body : JSON.stringify(body) });
+    const byId = id => fetch(`${origin}/api/sessions`).then(r => r.json()).then(j => j.sessions.find(s => s.id === id));
+    const json = async res => ({ status: res.status, body: await res.json() });
+    try {
+        const s6 = await byId('local_6');
+        assert.equal(s6.status, 'review');
+        assert.equal(s6.column, 'pending');
+        assert.equal(s6.title, s6.appTitle);
+        assert.deepEqual(s6.moves, [{ to: 'hold', action: 'hold' }, { to: 'done', action: 'confirm' }]);
+
+        assert.deepEqual(await json(await move('local_6', 'hold')), { status: 200, body: { ok: true, action: 'hold' } });
+        const held = await byId('local_6');
+        assert.equal(held.column, 'hold');
+        assert.deepEqual(held.moves, [{ to: 'done', action: 'confirm' }, { to: 'pending', action: 'undo' }]);
+
+        // 완료 by drag = decision only (no clipboard/chat hand-off, unlike /api/confirm)
+        assert.deepEqual(await json(await move('local_6', 'done')), { status: 200, body: { ok: true, action: 'confirm' } });
+        const done = await byId('local_6');
+        assert.equal(done.column, 'done');
+        assert.deepEqual(done.moves, [{ to: 'hold', action: 'hold' }, { to: 'pending', action: 'undo' }]);
+
+        assert.deepEqual(await json(await move('local_6', 'pending')), { status: 200, body: { ok: true, action: 'undo' } });
+        const back = await byId('local_6');
+        assert.equal(back.status, 'review');
+        assert.equal(back.column, 'pending');
+
+        // a working card can't be confirmed, and nothing moves into its own column
+        const s5 = await byId('local_5');
+        assert.equal(s5.column, 'working');
+        assert.deepEqual(s5.moves, [{ to: 'hold', action: 'hold' }]);
+        assert.deepEqual(await json(await move('local_5', 'done')), { status: 409, body: { error: 'move not allowed', moves: s5.moves } });
+        assert.equal((await move('local_5', 'working')).status, 409);
+        assert.equal((await post('/api/move/local_5')).status, 409);
+        assert.equal((await byId('local_5')).column, 'working');
+        assert.deepEqual(await json(await move('nope', 'hold')), { status: 404, body: { error: 'unknown session' } });
+
+        const s9 = await byId('local_9');
+        const appTitle = s9.appTitle;
+        assert.deepEqual(await json(await edit('local_9', { title: '  결제 모듈\n리팩터링  ' })), {
+            status: 200,
+            body: { ok: true, title: '결제 모듈 리팩터링', appTitle },
+        });
+        const renamed = await byId('local_9');
+        assert.equal(renamed.title, '결제 모듈 리팩터링');
+        assert.equal(renamed.appTitle, appTitle);
+
+        assert.deepEqual(await json(await edit('local_9', { title: '' })), { status: 200, body: { ok: true, title: appTitle, appTitle } });
+        assert.equal((await byId('local_9')).title, appTitle);
+        assert.deepEqual(JSON.parse(fs.readFileSync(path.join(HOME, '.claude/office/overrides.json'), 'utf8')), {});
+
+        assert.deepEqual(await json(await edit('local_9', { color: 'red' })), { status: 400, body: { error: 'unknown field: color' } });
+        assert.deepEqual(await json(await edit('local_9', { title: 123 })), { status: 400, body: { error: 'title must be a string' } });
+        assert.deepEqual(await json(await edit('local_9', 'not json')), { status: 400, body: { error: 'bad json' } });
+        assert.deepEqual(await json(await edit('local_9', { title: 'x' }, {})), { status: 415, body: { error: 'json only' } });
+        assert.deepEqual(await json(await edit('local_9', { title: 'x'.repeat(5000) })), { status: 413, body: { error: 'too large' } });
+        assert.deepEqual(await json(await edit('nope', { title: 'x' })), { status: 404, body: { error: 'unknown session' } });
+        const foreign = { 'content-type': 'application/json', origin: 'http://evil.test' };
+        assert.equal((await edit('local_9', { title: 'x' }, foreign)).status, 403);
+        assert.equal((await post('/api/move/local_5?to=hold', { headers: { origin: 'http://evil.test' } })).status, 403);
+        assert.equal((await byId('local_9')).title, appTitle);
     } finally {
         server.kill();
     }

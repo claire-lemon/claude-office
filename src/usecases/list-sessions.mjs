@@ -5,6 +5,7 @@ import { HOME, DAY, MAX_DESKS } from '../config.mjs';
 import { loadAppSessions } from '../sources/app-sessions.mjs';
 import { loadStates } from '../sources/hook-states.mjs';
 import * as decisionsStore from '../sources/decisions.mjs';
+import * as overridesStore from '../sources/overrides.mjs';
 import * as summaries from '../sources/summaries.mjs';
 import { transcriptPathFor, lastAssistantText } from '../sources/transcripts.mjs';
 import { gitInfo, mergeBase, shortstat, untrackedFiles, addedFilePatch } from '../sources/git.mjs';
@@ -50,6 +51,7 @@ export const listSessions = (now = Date.now()) => {
     const apps = loadAppSessions();
     const states = loadStates();
     const decisions = decisionsStore.load();
+    const overrides = overridesStore.load();
     const appByCli = new Map(apps.map(a => [a.cliSessionId, a]));
     const stateIds = new Set(states.map(s => s.id));
     const fromStates = states.map(state => ({ cli: state.id, state, app: appByCli.get(state.id) }));
@@ -73,8 +75,10 @@ export const listSessions = (now = Date.now()) => {
         const s = summaries.read(id);
         const summary = s && s.at >= (state?.at || 0) ? s.text : null;
         const status = deriveStatus({ state, hasReport: !!report, decision: decisions[id] });
+        const baseStatus = deriveStatus({ state, hasReport: !!report, decision: null });
         const gi = gitInfo(cwd);
         const diffStat = ['review', 'question'].includes(status) ? statFor(id, state?.at, app) : null;
-        return toSessionView({ cli, state, app, lastAt, cwd, transcript, lastText, report, id, summary, status, gi, diffStat, home: HOME });
+        const override = overrides[id];
+        return toSessionView({ cli, state, app, lastAt, cwd, transcript, lastText, report, id, summary, status, baseStatus, gi, diffStat, home: HOME, override });
     });
 };
