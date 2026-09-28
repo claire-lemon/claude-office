@@ -136,6 +136,9 @@
   .kan-title{font-size:12px; font-weight:700; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .kan-tag{font-size:10px; padding:1px 6px; border-radius:8px; background:var(--accent); color:#fff; flex:none;}
   .kan-tag.tag-danger{background:var(--bad);}
+  .col-head{display:flex; align-items:center; justify-content:space-between; gap:6px;}
+  .col-btn{font-size:11px; padding:2px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--muted); cursor:pointer;}
+  .col-btn[hidden]{display:none;}
   .kan-meta{font-size:11px; color:var(--muted); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .kan-diffstat{font-size:11px; margin-top:2px; white-space:normal; overflow-wrap:break-word;}
   .kan-diffstat.hidden{display:none;}
@@ -244,7 +247,7 @@
         <div class="kan-col" data-col="working"><h3>작업 중</h3><div class="kan-list" id="col-working"></div></div>
         <div class="kan-col" data-col="pending"><h3>결재 대기</h3><div class="kan-list" id="col-pending"></div></div>
         <div class="kan-col" data-col="hold"><h3>보류</h3><div class="kan-list" id="col-hold"></div></div>
-        <div class="kan-col" data-col="done"><h3>완료</h3><div class="kan-list" id="col-done"></div></div>
+        <div class="kan-col" data-col="done"><h3 class="col-head">완료 <button type="button" class="col-btn" id="archive-done" hidden>모두 아카이브</button></h3><div class="kan-list" id="col-done"></div></div>
       </div>
     </section>
   </div>
@@ -642,6 +645,7 @@
         colEl[col].appendChild(card);
       });
     });
+    $('#archive-done').hidden = !buckets.done.length;
     const present = new Set(KAN_COLUMNS.flatMap(c => buckets[c].map(s => s.id)));
     Array.from(cardEls.keys()).forEach(id => {
       if (!present.has(id)) { cardEls.get(id).remove(); cardEls.delete(id); }
@@ -906,6 +910,13 @@
     try { renderArchive((await fetch('/api/archived').then(r => r.json())).archived || []); }
     catch { $('#archive-body').innerHTML = '<p class="hint">보관함을 불러오지 못했어요.</p>'; }
   };
+  const archiveAllDone = async () => {
+    const ids = [...state.sessionsById.values()].filter(s => s.status === 'done').map(s => s.id);
+    const results = await Promise.all(ids.map(id => fetch(`/api/archive/${encodeURIComponent(id)}`, { method:'POST' }).then(r => r.ok).catch(() => false)));
+    if (ids.includes(selected.id)) closePanel();
+    poll();
+    flashPanelError(`완료 ${results.filter(Boolean).length}건을 보관함으로 옮겼어요`);
+  };
   const openArchive = () => { $('#archive-dialog').showModal(); loadArchive(); };
   const restoreArchived = async id => {
     if (await postDecision('restore', id)) { flashPanelError('보류 칸으로 복구했어요'); loadArchive(); }
@@ -927,6 +938,7 @@
 
   document.addEventListener('click', e => {
     if (e.target.closest('#archive-open')) { openArchive(); return; }
+    if (e.target.closest('#archive-done')) { archiveAllDone(); return; }
     if (e.target.closest('#archive-close')) { $('#archive-dialog').close(); return; }
     if (e.target.id === 'archive-dialog') { $('#archive-dialog').close(); return; } // backdrop click
     const restoreBtn = e.target.closest('.restore-btn');
