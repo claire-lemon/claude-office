@@ -33,7 +33,7 @@ flowchart TB
         GIT["워크트리 git<br/>diff · 브랜치 · 프로젝트"]
     end
 
-    SRV["server.mjs + lib.mjs<br/>127.0.0.1:7777"]
+    SRV["server.mjs → src/<br/>127.0.0.1:7777"]
     DEC[("~/.claude/office/decisions.json<br/>컨펌 · 보류 · 아카이브")]
     UI["브라우저<br/>픽셀 오피스 · 결재함<br/>상세 패널 · 보관함"]
 
@@ -52,6 +52,31 @@ flowchart TB
 - 세션 상태는 hooks가 남긴 이벤트로, 제목·브랜치·딥링크는 앱 파일에서, 변경사항은 각 워크트리의 git에서 읽는다.
 - 서버가 쓰는 곳은 `~/.claude/office/` 하나다. 앱 데이터와 세션 파일은 읽기만 한다.
 - 세션에 무언가를 보낼 때(컨펌, OK)는 마지막 Enter를 항상 사용자가 누른다.
+
+### 코드 구조
+
+```
+server.mjs              진입점 (src/http/server.mjs 실행)
+install.mjs             hooks 설치·제거
+hooks/report.mjs        hook (실행 속도 때문에 의존성 없이 단독)
+src/
+  config.mjs            환경변수·경로·한도 (환경변수는 여기서만 읽음)
+  http/                 controller: 입력 정리 → use-case 호출 → 응답, Host/Origin 검사
+  usecases/             흐름: 세션 목록, 변경사항, 컨펌·보류·아카이브, 다음 작업, 요약
+  domain/               순수 함수: 상태 판정, 보고서 파싱, 프롬프트, diff 파싱
+  sources/              데이터 읽기·쓰기: 앱 세션 파일, hook 상태, 대화 기록, 결정, git
+  platform/             OS 부수효과: open, pbcopy, claude -p
+public/
+  index.html            마크업 뼈대
+  css/                  base · office · board · panel · changes · markdown
+  js/                   main → api · store → views/ · panel/ (lib/은 순수 함수)
+test/unit/              순수 함수 테스트
+test/integration/       서버·fixture·임시 git 레포 테스트
+```
+
+- 의존 방향: `http → usecases → domain · sources · platform`. `domain/`과 `public/js/lib/`, `panel/actions.js`는 아무것도 import하지 않는 순수 모듈이다.
+- 파일 쓰기와 OS 명령은 `sources/`와 `platform/`에만 있다.
+- 설계 문서: [`docs/specs/2026-09-28-layering-and-panel-design.md`](docs/specs/2026-09-28-layering-and-panel-design.md)
 
 ## 먼저 데모로 보기 (실제 설정 안 건드림)
 
@@ -77,6 +102,13 @@ node scripts/demo.mjs public 7770
 특정 세션 패널을 바로 여는 주소: `http://127.0.0.1:7777/?open=<세션 id>` (변경사항 탭은 `&tab=diff`).
 
 hooks는 설치 **이후** 시작된 턴부터 잡힌다. 설치 전 세션은 24시간 이내 활동분만 회색(상태 미상)으로 보인다.
+
+## 상세 패널
+
+- **보고서 탭**: 결재 보고를 마크다운으로 보여준다. "다음 작업"은 항목마다 **▶ 진행** 버튼이 있다.
+- **변경사항 탭**: 무엇과 비교했는지(기준 브랜치)와 `+추가 −삭제 · 파일 수 · 새 파일 수`를 먼저 보여준다. 새 파일은 커밋 여부와 상관없이 **내용 전체**가 보이고, 새 `.md` 파일은 **미리보기 / 원문**으로 전환된다. 워크트리 없이 연 세션도 그 폴더의 git 레포로 비교한다. 변경이 없으면 이유를 적는다. 세션이 새로 움직이면 자동으로 다시 불러온다.
+- **하단 버튼**: 상태마다 주 버튼 하나만 강조한다. 결재 대기는 "컨펌 · 커밋·PR", 다음 작업이 있으면 "OK · 1번 진행 ▾"(▾로 2·3번 선택)이다. 보조 버튼은 "채팅방 열기"이고 나머지는 **⋯ 메뉴**(요약 만들기, 보류, 아카이브)에 있다.
+- **크기 조절**: 패널 왼쪽 가장자리를 드래그한다. 손잡이에 포커스한 뒤 ←/→로 조절하고, 더블클릭하면 기본 폭으로 돌아온다. 폭은 브라우저에 저장된다.
 
 ## 컨펌과 다음 작업
 

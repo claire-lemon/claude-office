@@ -1,7 +1,7 @@
 # 설계: 레이어 분리 + 상세 패널 개선
 
 - 작성일: 2026-09-28
-- 상태: 설계 검토 중 (구현 전)
+- 상태: 구현 완료 (2026-09-28, 커밋 `f5ade35` `0fa775e` `cb3a0ec` `a9f7c95`)
 - 범위: ① 백엔드·프론트엔드 폴더/레이어 분리 ② 변경사항 탭 개선 ③ 하단 버튼 정리 ④ 상세 패널 크기 조절
 - 근거 조사: 앞선 레퍼런스 조사 (VS Code, GitHub PR, Vibe Kanban, Conductor, Zed, Linear, GitLab, GitHub Primer, Atlassian 등)
 
@@ -253,3 +253,11 @@ test/integration/   서버 기동, fixture HOME, 임시 git 레포 (기존 테�
 3. 기존 API 필드는 바꾸지 않고 추가만
 4. hook은 단독 실행 유지
 5. `node server.mjs`, `node install.mjs`, `npm test` 사용법은 그대로
+
+## 10. 구현하며 달라진 점
+
+1. 프론트 모듈 확장자는 `.mjs`가 아니라 `.js`. 서버가 이미 `.js`를 올바른 MIME으로 제공하고, `package.json`이 `"type": "module"`이라 Node 테스트에서도 그대로 import된다.
+2. `platform/claude-cli.mjs`의 `runSummarizer(input, systemPrompt)`는 시스템 프롬프트를 인자로 받는다. `SUMMARY_SYSTEM`은 `domain/prompts.mjs`에 있고, `platform → domain` import를 만들지 않기 위해서다.
+3. `totals.added`와 `.md` 미리보기는 **커밋 여부와 상관없이** 새 파일(`status: 'added'`)이면 적용한다. 처음 구현은 아직 커밋 안 된 새 파일만 셌는데, 실제 세션 대부분이 새 문서를 이미 커밋해서 "새 파일 0"으로 보였다.
+4. 헤더 카운터 갱신은 별도 뷰 파일 없이 `views/board.js`에 둔다(칸반 분류와 같은 계산).
+5. 패널 폭 저장은 `lib/storage.js`의 `loadPanelWidth`·`savePanelWidth`에 둔다.

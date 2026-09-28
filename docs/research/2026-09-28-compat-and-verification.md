@@ -1,5 +1,7 @@
 # 호환성 · 검증 상태 조사 (2026-09-28)
 
+> 이 문서의 `파일:줄` 위치는 레이어 분리(`f5ade35`) **이전** 코드 기준이다. `lib.mjs`는 이후 `src/` 아래 모듈로 나뉘었다(예: 앱 데이터 경로 → `src/config.mjs`, `open`·`pbcopy` → `src/platform/macos.mjs`).
+
 ## 1. 목적
 
 1. Claude Office가 macOS·Windows에서 동작하는지 확인

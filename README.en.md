@@ -34,7 +34,7 @@ flowchart TB
         GIT["git per worktree<br/>diff · branch · project"]
     end
 
-    SRV["server.mjs + lib.mjs<br/>127.0.0.1:7777"]
+    SRV["server.mjs → src/<br/>127.0.0.1:7777"]
     DEC[("~/.claude/office/decisions.json<br/>confirm · hold · archive")]
     UI["Browser<br/>pixel office · approval board<br/>detail panel · archive list"]
 
@@ -53,6 +53,31 @@ flowchart TB
 - Session state comes from hook events; titles, branches, and deep links from the app's files; changes from each worktree's git.
 - The server writes only to `~/.claude/office/`. It only reads app data and session files.
 - Whenever something goes to a session (confirm, OK), you press the final Enter yourself.
+
+### Code layout
+
+```
+server.mjs              entry (runs src/http/server.mjs)
+install.mjs             install / uninstall hooks
+hooks/report.mjs        the hook (standalone, no imports, for startup speed)
+src/
+  config.mjs            env vars, paths, limits (the only place env vars are read)
+  http/                 controller: normalize input → call a use case → respond; Host/Origin checks
+  usecases/             flows: session list, changes, confirm/hold/archive, next task, summary
+  domain/               pure functions: status, report parsing, prompts, diff parsing
+  sources/              data in/out: app session files, hook state, transcripts, decisions, git
+  platform/             OS side effects: open, pbcopy, claude -p
+public/
+  index.html            markup skeleton
+  css/                  base · office · board · panel · changes · markdown
+  js/                   main → api · store → views/ · panel/ (lib/ is pure)
+test/unit/              pure-function tests
+test/integration/       server, fixtures, temp git repos
+```
+
+- Dependencies point one way: `http → usecases → domain · sources · platform`. `domain/`, `public/js/lib/` and `panel/actions.js` import nothing.
+- File writes and OS commands live only in `sources/` and `platform/`.
+- Design (Korean): [`docs/specs/2026-09-28-layering-and-panel-design.md`](docs/specs/2026-09-28-layering-and-panel-design.md)
 
 ## Try the demo first (touches no real settings)
 
@@ -78,6 +103,13 @@ Ten fake sessions change state every 8 seconds. Open `http://127.0.0.1:7770`.
 To open a session's panel directly: `http://127.0.0.1:7777/?open=<session id>` (add `&tab=diff` for the changes tab).
 
 Hooks only see turns that start **after** installation. Older sessions active in the last 24 hours show up grey (state unknown).
+
+## Detail panel
+
+- **Report tab**: the approval report rendered as markdown. Each "다음 작업" (next task) item has its own **▶ 진행** (run) button.
+- **Changes tab**: first shows what it compared against (base branch) and `+added −deleted · files · new files`. New files show their **full content** whether committed or not, and new `.md` files switch between **미리보기 / 원문** (preview / raw). Sessions opened without a worktree are compared in their folder's git repo. When there are no changes, it says why. It reloads when the session moves on.
+- **Footer**: one primary action per state — "컨펌 · 커밋·PR" (confirm) while awaiting approval, or "OK · 1번 진행 ▾" (run next task #1, ▾ for #2/#3) when next tasks exist. "채팅방 열기" (open chat) is secondary; the rest sits in the **⋯ menu** (summary, hold, archive).
+- **Resize**: drag the panel's left edge, or focus the handle and use ←/→; double-click resets the width. The width is saved in the browser.
 
 ## Board columns
 
