@@ -113,7 +113,46 @@ export const parseReport = text => {
     );
 };
 
-export const deriveStatus = ({ state, hasReport, confirmedAt }) => {
+// "### 다음 작업" numbered items -> [{ title, detail }]; indented lines become the item's detail.
+export const parseTasks = text =>
+    String(text || '')
+        .split('\n')
+        .reduce((acc, line) => {
+            const top = line.match(/^(?:\d+[.)]|[-*])\s+(.*)$/);
+            if (top) return [...acc, { title: top[1].trim(), detail: [] }];
+            if (acc.length && line.trim()) acc[acc.length - 1].detail.push(line.trim().replace(/^(?:\d+[.)]|[-*])\s+/, ''));
+            return acc;
+        }, [])
+        .map(t => ({ title: t.title, detail: t.detail.join('\n') }));
+
+export const CONFIRM_INSTRUCTION = `결재 승인. 아래 순서로 진행해줘.
+1. 변경사항 커밋 (이 레포의 커밋 메시지 규칙 준수, 변경이 없으면 생략)
+2. push 후 PR 생성 (이미 PR이 있으면 갱신)
+3. 결재 보고로 마무리
+   1. 한 줄 요약에 PR 링크 포함
+   2. \`### 다음 작업\` 섹션에 이어서 할 작업 2~3개 추천 (1번이 가장 추천, 각 항목 아래 들여쓴 하위 항목으로 이유)`;
+
+const NEXT_PROMPT_LIMIT = 2000;
+export const nextTaskPrompt = (session, task) => {
+    const pr = (session.prs || []).map(p => p.url).filter(Boolean)[0];
+    const summary = session.report?.['한 줄 요약'] || '';
+    const text = [
+        `이전 세션 "${session.title}"에서 이어지는 작업이야.`,
+        `- 이전 브랜치: ${session.branch || '없음'}${pr ? `, PR: ${pr}` : ''}`,
+        summary && `- 이전 작업 요약:\n${summary}`,
+        '',
+        `할 일: ${task.title}`,
+        task.detail && task.detail,
+    ]
+        .filter(l => l !== false && l !== null && l !== undefined)
+        .join('\n');
+    return text.slice(0, NEXT_PROMPT_LIMIT);
+};
+
+export const newSessionLink = (folder, prompt) =>
+    `claude://code/new?q=${encodeURIComponent(prompt)}&folder=${encodeURIComponent(folder)}`;
+
+export const deriveStatus =({ state, hasReport, confirmedAt }) => {
     if (!state) return 'unknown';
     if (confirmedAt && confirmedAt > state.at) return 'done';
     if (state.event === 'UserPromptSubmit') return 'working';
@@ -161,6 +200,8 @@ export const buildSessions = (now = Date.now()) => {
                 lastAt,
                 branch: app?.branch || null,
                 sourceBranch: app?.sourceBranch || null,
+                originCwd: app?.originCwd || null,
+                nextTasks: parseTasks(report?.['다음 작업']),
                 worktreePath: app?.worktreePath || null,
                 prs: (app?.prs || []).map(p => ({ number: p.number, state: p.state, url: p.url })),
                 turns: app?.completedTurns ?? null,

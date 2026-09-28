@@ -94,3 +94,52 @@ test('install is idempotent, keeps foreign hooks, uninstall removes only ours', 
     run('--uninstall');
     assert.deepEqual(JSON.parse(fs.readFileSync(settings, 'utf8')), foreign);
 });
+
+test('parseTasks + nextTaskPrompt + newSessionLink', () => {
+    const tasks = lib.parseTasks('1. 타입 배포\n   1. 선배포 필요\n2. 프론트 표시\n3. 캐시 적용');
+    assert.deepEqual(tasks, [
+        { title: '타입 배포', detail: '선배포 필요' },
+        { title: '프론트 표시', detail: '' },
+        { title: '캐시 적용', detail: '' },
+    ]);
+    assert.deepEqual(lib.parseTasks(undefined), []);
+    const prompt = lib.nextTaskPrompt(
+        { title: '뷰 확장', branch: 'feat/x', prs: [{ url: 'https://github.com/a/b/pull/1' }], report: { '한 줄 요약': '1. 추가 완료' } },
+        tasks[0],
+    );
+    assert.match(prompt, /이전 세션 "뷰 확장"/);
+    assert.match(prompt, /PR: https:\/\/github.com\/a\/b\/pull\/1/);
+    assert.match(prompt, /할 일: 타입 배포\n선배포 필요$/);
+    assert.equal(lib.nextTaskPrompt({ title: 't' }, { title: 'x'.repeat(5000), detail: '' }).length, 2000);
+    const link = lib.newSessionLink('/a b/repo', '할 일 & ok');
+    assert.equal(link, 'claude://code/new?q=%ED%95%A0%20%EC%9D%BC%20%26%20ok&folder=%2Fa%20b%2Frepo');
+});
+
+test('server: confirm hands off instruction, next opens a prefilled new session (dry run)', async () => {
+    const { spawn } = await import('node:child_process');
+    const port = '7798';
+    const server = spawn('node', [path.join(ROOT, 'server.mjs')], { env: { ...env, OFFICE_DRY: '1', OFFICE_PORT: port } });
+    await new Promise(r => server.stdout.once('data', r));
+    const origin = `http://127.0.0.1:${port}`;
+    const post = p => fetch(`${origin}${p}`, { method: 'POST', headers: { origin } });
+    try {
+        const list = await fetch(`${origin}/api/sessions`).then(r => r.json());
+        const s1 = list.sessions.find(s => s.id === 'local_1');
+        assert.equal(s1.nextTasks.length, 3);
+
+        const bad = await fetch(`${origin}/api/confirm/local_1`, { method: 'POST', headers: { origin: 'http://evil.test' } });
+        assert.equal(bad.status, 403);
+
+        const c = await post('/api/confirm/local_1').then(r => r.json());
+        assert.match(c.copied, /커밋[\s\S]*PR[\s\S]*다음 작업/);
+        assert.equal(c.opened, 'claude://claude.ai/epitaxy/local_1');
+
+        const n = await post('/api/next/local_1?index=1').then(r => r.json());
+        const q = decodeURIComponent(new URL(n.opened.replace('claude://', 'http://')).searchParams.get('q'));
+        assert.match(n.opened, /^claude:\/\/code\/new\?q=.+&folder=/);
+        assert.match(q, /할 일: 프론트\(my-web\)에서 `workspace\$` 표시/);
+        assert.equal((await post('/api/next/local_1?index=9')).status, 404);
+    } finally {
+        server.kill();
+    }
+});

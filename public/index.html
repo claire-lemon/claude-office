@@ -176,6 +176,8 @@
   .patch .meta{color:var(--muted); display:inline-block; width:100%;}
   .untracked ul{margin:4px 0 0; padding-left:18px; font-size:12px;}
   .panel-actions{display:flex; flex-wrap:wrap; gap:6px; padding:10px 16px 16px; border-top:1px solid var(--line);}
+  .act-btn.act-primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:30; background:var(--ink); color:var(--bg-panel); padding:10px 16px; border-radius:12px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.18); max-width:90vw;}
   .act-btn{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px;}
   .act-btn:disabled{opacity:.6; cursor:default;}
   .act-btn[data-action="confirm"],.act-btn[data-action="unconfirm"]{background:var(--accent); color:#fff; border-color:var(--accent);}
@@ -594,7 +596,7 @@
   const updateCard = (card, session) => {
     card.querySelector('.kan-title').textContent = session.title || '(제목 없음)';
     const tag = card.querySelector('.kan-tag');
-    const tagText = session.status === 'review' ? '보고서' : session.status === 'question' ? '질문' : '';
+    const tagText = session.status === 'review' ? ((session.nextTasks || []).length ? '다음 작업' : '보고서') : session.status === 'question' ? '질문' : '';
     tag.textContent = tagText;
     tag.classList.toggle('hidden', !tagText);
     card.querySelector('.kan-meta').textContent = metaLine(session);
@@ -704,7 +706,13 @@
     if (session.prs && session.prs.length) el.appendChild(actionBtn('PR 열기','pr'));
     const loading = summaryLoadingIds.has(session.id);
     el.appendChild(actionBtn(loading ? '생성 중... (최대 60초)' : '요약 만들기', 'summary', loading));
-    el.appendChild(actionBtn(session.status==='done' ? '컨펌 취소' : '컨펌', session.status==='done' ? 'unconfirm' : 'confirm'));
+    el.appendChild(actionBtn(session.status==='done' ? '컨펌 취소' : '컨펌 · 커밋·PR', session.status==='done' ? 'unconfirm' : 'confirm'));
+    (session.nextTasks || []).slice(0, 3).forEach((t, i) => {
+      const b = actionBtn(i === 0 ? 'OK · 1번 진행' : `${i + 1}번 진행`, `next:${i}`);
+      b.title = t.title;
+      if (i === 0) b.classList.add('act-primary');
+      el.appendChild(b);
+    });
   };
 
   const fullMessage = session => session.lastMessage
@@ -798,12 +806,18 @@
     renderPanelFull();
   };
 
-  const flashPanelError = msg => {
-    const el = $('#panel-actions');
-    const span = document.createElement('span');
-    span.className = 'hint'; span.textContent = msg;
-    el.appendChild(span);
-    setTimeout(() => span.remove(), 2500);
+  // Lives outside the panel: panel actions are re-rendered on every poll.
+  const flashPanelError = (msg, ms = 2500) => {
+    const t = document.createElement('div');
+    t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), ms);
+  };
+  const stampFx = text => {
+    const stamp = document.createElement('div');
+    stamp.className = 'stamp-fx'; stamp.textContent = text;
+    $('#stamp-layer').appendChild(stamp);
+    stamp.addEventListener('animationend', () => stamp.remove());
   };
 
   const fetchSummary = async id => {
@@ -836,13 +850,21 @@
     try {
       const res = await fetch(`/api/confirm/${encodeURIComponent(id)}`, { method:'POST' });
       if (res.ok) {
-        const layer = $('#stamp-layer');
-        const stamp = document.createElement('div');
-        stamp.className = 'stamp-fx'; stamp.textContent = '쾅';
-        layer.appendChild(stamp);
-        stamp.addEventListener('animationend', () => stamp.remove());
+        const data = await res.json().catch(() => ({}));
+        stampFx('쾅');
         poll();
+        flashPanelError(data.opened ? '지시문 복사됨 · 채팅방에서 ⌘V → Enter' : '지시문 복사됨 · 세션에 ⌘V → Enter', 6000);
       }
+    } catch {}
+  };
+  const runNext = async (id, index) => {
+    try {
+      const res = await fetch(`/api/next/${encodeURIComponent(id)}?index=${index}`, { method:'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { flashPanelError(data.error === 'repo folder not found' ? '레포 폴더를 찾지 못했어요' : '다음 작업을 열지 못했어요'); return; }
+      stampFx('출발');
+      poll();
+      flashPanelError('새 세션 입력창을 열었어요 · Enter만 누르세요', 6000);
     } catch {}
   };
   const runUnconfirm = async id => {
@@ -859,6 +881,7 @@
     else if (action === 'summary') runSummary(id);
     else if (action === 'confirm') runConfirm(id);
     else if (action === 'unconfirm') runUnconfirm(id);
+    else if (action.startsWith('next:')) runNext(id, Number(action.slice(5)));
   };
 
   document.addEventListener('click', e => {

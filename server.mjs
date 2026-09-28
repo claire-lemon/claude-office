@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { buildSessions, diffFor, readJson, writeJsonAtomic, lastAssistantText, CONFIRMED_FILE, SUMMARY_DIR } from './lib.mjs';
+import {
+    buildSessions, diffFor, readJson, writeJsonAtomic, lastAssistantText, CONFIRMED_FILE, SUMMARY_DIR,
+    CONFIRM_INSTRUCTION, nextTaskPrompt, newSessionLink,
+} from './lib.mjs';
 
 const PORT = Number(process.env.OFFICE_PORT || 7777);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +36,17 @@ const send = (res, code, body, type = 'application/json; charset=utf-8') => {
 };
 
 const findSession = id => buildSessions().find(s => s.id === id);
+const markConfirmed = id => writeJsonAtomic(CONFIRMED_FILE, { ...readJson(CONFIRMED_FILE, {}), [id]: Date.now() });
+
+// OFFICE_DRY=1 (tests): report what would happen without touching the clipboard or the Claude app.
+const DRY = !!process.env.OFFICE_DRY;
+const openLink = link => (DRY ? null : execFile('open', [link], () => {}));
+const copyText = text => {
+    if (DRY) return;
+    // pbcopy drops non-ASCII text entirely when the locale is unset (e.g. launched from an app).
+    const child = execFile('pbcopy', [], { env: { ...process.env, LANG: 'en_US.UTF-8' } }, () => {});
+    child.stdin.end(text);
+};
 
 const routes = {
     'GET /api/sessions': (req, res) => send(res, 200, { now: Date.now(), sessions: buildSessions() }),
@@ -40,10 +54,28 @@ const routes = {
         const s = findSession(id);
         return s ? send(res, 200, diffFor(s)) : send(res, 404, { error: 'unknown session' });
     },
+    // Confirm = hand the session its "commit -> PR -> recommend next" instruction.
+    // Existing chats can't be prefilled by deep link, so it goes to the clipboard and the chat opens.
     'POST /api/confirm': (req, res, id) => {
-        if (!findSession(id)) return send(res, 404, { error: 'unknown session' });
-        writeJsonAtomic(CONFIRMED_FILE, { ...readJson(CONFIRMED_FILE, {}), [id]: Date.now() });
-        return send(res, 200, { ok: true });
+        const s = findSession(id);
+        if (!s) return send(res, 404, { error: 'unknown session' });
+        markConfirmed(id);
+        copyText(CONFIRM_INSTRUCTION);
+        if (s.link?.startsWith('claude://')) openLink(s.link);
+        return send(res, 200, { ok: true, copied: CONFIRM_INSTRUCTION, opened: s.link || null });
+    },
+    // OK = start the recommended next task in a NEW session, prompt prefilled (user presses Enter).
+    'POST /api/next': (req, res, id, url) => {
+        const s = findSession(id);
+        if (!s) return send(res, 404, { error: 'unknown session' });
+        const task = s.nextTasks[Number(url.searchParams.get('index') || 0)];
+        if (!task) return send(res, 404, { error: 'no such next task' });
+        const folder = s.originCwd || s.worktreePath;
+        if (!folder || !fs.existsSync(folder)) return send(res, 404, { error: 'repo folder not found' });
+        const link = newSessionLink(folder, nextTaskPrompt(s, task));
+        markConfirmed(id);
+        openLink(link);
+        return send(res, 200, { ok: true, opened: link });
     },
     'POST /api/unconfirm': (req, res, id) => {
         const { [id]: _drop, ...rest } = readJson(CONFIRMED_FILE, {});
@@ -53,7 +85,7 @@ const routes = {
     'POST /api/open': (req, res, id) => {
         const s = findSession(id);
         if (!s?.link?.startsWith('claude://')) return send(res, 404, { error: 'no chat link' });
-        execFile('open', [s.link], () => {});
+        openLink(s.link);
         return send(res, 200, { ok: true });
     },
     'POST /api/summary': (req, res, id) => {
@@ -77,7 +109,7 @@ const server = http.createServer((req, res) => {
         if (req.method === 'POST' && !ORIGINS.includes(req.headers.origin)) return send(res, 403, { error: 'bad origin' });
         const [, , name, id = ''] = url.pathname.split('/');
         const route = url.pathname.startsWith('/api/') && routes[`${req.method} /api/${name}`];
-        if (route) return route(req, res, decodeURIComponent(id));
+        if (route) return route(req, res, decodeURIComponent(id), url);
         if (req.method !== 'GET') return send(res, 405, { error: 'method' });
         const file = path.join(PUBLIC, url.pathname === '/' ? 'index.html' : path.normalize(url.pathname));
         if (!file.startsWith(PUBLIC) || !fs.existsSync(file)) return send(res, 404, 'not found', 'text/plain');

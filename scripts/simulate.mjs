@@ -34,7 +34,12 @@ const REPORT = `작업 끝났습니다.
 1. \`http :8888/profile\` 호출
    1. \`workspace$\` 필드 존재 확인
 2. \`npm test\` 실행
-   1. 42개 통과 확인`;
+   1. 42개 통과 확인
+### 다음 작업
+1. my-types 패키지 버전 올려 배포
+   1. API가 새 타입을 쓰려면 선배포 필요
+2. 프론트(my-web)에서 \`workspace$\` 표시
+3. use-case N+1 조회 캐시 적용`;
 
 const hook = (id, event, cwd, transcript, message) =>
     execFileSync('node', [HOOK], {
@@ -61,6 +66,12 @@ if (!fs.existsSync(repo)) {
     fs.writeFileSync(path.join(repo, 'new-file.md'), 'untracked\n');
 }
 
+const repoDir = n => {
+    const dir = path.join(HOME, 'repos', `r${n}`);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+};
+
 const sessions = TITLES.map((title, i) => {
     const cli = `cli-${i}`;
     const cwd = i === 0 ? repo : path.join(HOME, 'work', `w${i}`);
@@ -70,7 +81,7 @@ const sessions = TITLES.map((title, i) => {
     fs.writeFileSync(
         path.join(APP, `local_${i}.json`),
         JSON.stringify({
-            sessionId: `local_${i}`, cliSessionId: cli, title, cwd, originCwd: `/repo/${i % 3}`,
+            sessionId: `local_${i}`, cliSessionId: cli, title, cwd, originCwd: i === 0 ? repo : repoDir(i % 3),
             worktreePath: i === 0 ? repo : null, sourceBranch: 'main', branch: `feat/s${i}`,
             prs: i === 0 ? [{ number: 490, state: 'OPEN', url: 'https://github.com/x/y/pull/490' }] : [],
             completedTurns: 3 + i, lastActivityAt: Date.now(), isArchived: false,
