@@ -8,6 +8,7 @@ import { summarize } from '../usecases/summarize.mjs';
 import { moveSession } from '../usecases/move.mjs';
 import { editSession } from '../usecases/edit-session.mjs';
 import { listTodos, createTodo, updateTodo, deleteTodo, startTodo } from '../usecases/todos.mjs';
+import { getMeeting, startMeeting, endMeeting } from '../usecases/meeting.mjs';
 import { readJsonBody } from './body.mjs';
 
 export const send = (res, code, body, type = 'application/json; charset=utf-8') => {
@@ -22,6 +23,8 @@ const TODO_BODY_LIMIT = 16 * 1024;
 // Todo usecase errors that mean "no such thing"; every other one is a bad request.
 const TODO_NOT_FOUND = new Set(['unknown todo', 'repo folder not found']);
 const todoError = (res, error) => send(res, TODO_NOT_FOUND.has(error) ? 404 : 400, { error });
+// POST /api/meeting/<action>: the id segment picks the action.
+const MEETING_ACTIONS = { start: startMeeting, end: endMeeting };
 
 export const routes = {
     'GET /api/sessions': (req, res) => send(res, 200, { now: Date.now(), sessions: listSessions() }),
@@ -110,4 +113,7 @@ export const routes = {
         if (result.error) return todoError(res, result.error);
         return send(res, 200, { ok: true, opened: result.opened });
     },
+    'GET /api/meeting': (req, res) => send(res, 200, getMeeting()),
+    'POST /api/meeting': (req, res, id) =>
+        Object.hasOwn(MEETING_ACTIONS, id) ? send(res, 200, { ok: true, ...MEETING_ACTIONS[id]() }) : send(res, 404, { error: 'unknown action' }),
 };

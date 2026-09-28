@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { TODO_FOLDERS_LIMIT } from '../config.mjs';
+import { TODO_FOLDERS_LIMIT, OFFICE_DIR } from '../config.mjs';
 import * as todosStore from '../sources/todos.mjs';
 import { loadAppSessions } from '../sources/app-sessions.mjs';
 import { normalizeTodoPatch, toTodoView, visibleToday, isSameLocalDay } from '../domain/todo.mjs';
@@ -24,12 +24,13 @@ const links = now => linkIndex(listSessions(now), now);
 const viewOf = (id, todo, index, now) => toTodoView({ id, todo, sessions: index.get(id) ?? [], now });
 
 // Recent project folders for the add form: each app session's repo folder once, newest activity first.
-const folders = () =>
+// OFFICE_DIR is the 회의실 facilitator's folder, not a project.
+export const folders = () =>
     [
         ...Map.groupBy(
             loadAppSessions()
                 .map(a => ({ path: a.originCwd || a.cwd, lastAt: a.lastActivityAt || 0 }))
-                .filter(f => f.path)
+                .filter(f => f.path && f.path !== OFFICE_DIR)
                 .sort((a, b) => b.lastAt - a.lastAt),
             f => f.path,
         ).values(),
@@ -54,12 +55,15 @@ export const listTodos = (now = Date.now()) => {
     };
 };
 
-export const createTodo = (raw, now = Date.now()) => {
+// Who wrote the todo: the 칠판 form (HTTP) or the 회의실 facilitator (CLI --source scrum).
+const SOURCES = ['manual', 'scrum'];
+
+export const createTodo = (raw, now = Date.now(), { source = 'manual' } = {}) => {
     const result = normalizeTodoPatch(raw, { create: true });
     if (!result.ok) return { error: result.error };
     if (!isDir(result.patch.folder)) return { error: 'folder not found' };
     const id = newId(todosStore.load());
-    const todo = { detail: '', ...result.patch, createdAt: now, source: 'manual', manual: null, deletedAt: null };
+    const todo = { detail: '', ...result.patch, createdAt: now, source: SOURCES.includes(source) ? source : 'manual', manual: null, deletedAt: null };
     todosStore.save(id, todo);
     return { todo: toTodoView({ id, todo, sessions: [], now }) };
 };

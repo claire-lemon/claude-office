@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PORT, PUBLIC_DIR } from '../config.mjs';
 import { routes, send } from './routes.mjs';
+import { installGuide } from '../usecases/meeting.mjs';
 
 const ORIGINS = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`];
 const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
@@ -31,5 +32,13 @@ const server = http.createServer((req, res) => {
         return fail(res, e);
     }
 });
+
+// The facilitator session reads OFFICE_DIR/CLAUDE.md. A read-only home must not keep the office closed;
+// stderr only (tests wait for the first stdout line).
+try {
+    installGuide();
+} catch (e) {
+    console.error(`facilitator guide not written: ${e.message}`);
+}
 
 server.listen(PORT, '127.0.0.1', () => console.log(`office open: http://127.0.0.1:${PORT}`));

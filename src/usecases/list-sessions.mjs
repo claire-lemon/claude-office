@@ -14,6 +14,7 @@ import { activeDecision, deriveStatus, seatAtDesks } from '../domain/status.mjs'
 import { parseReport } from '../domain/report.mjs';
 import { toSessionView } from '../domain/session-view.mjs';
 import { todoIdIn } from '../domain/todo.mjs';
+import { meetingIdIn } from '../domain/meeting.mjs';
 
 // New (untracked) files added to a tracked shortstat's counts, so a report that only created
 // files (git diff ignores those) doesn't read as "변경 없음" on the card.
@@ -93,7 +94,9 @@ export const listSessions = (now = Date.now()) => {
         const diffStat = ['review', 'question'].includes(status) ? statFor(id, state?.at, app) : null;
         const override = overrides[id];
         const view = toSessionView({ cli, state, app, lastAt, cwd, transcript, lastText, report, id, summary, status, baseStatus, gi, diffStat, home: HOME, override });
-        // Additive fields: the todo this session was started for, and when the active lead decision was made.
-        return { ...view, todoId: todoIdIn(firstPromptHead(transcript)), decidedAt: active ? decisions[id].at : null };
+        // Additive fields: the todo / 회의실 meeting this session was started for, and when the active lead
+        // decision was made.
+        const head = firstPromptHead(transcript);
+        return { ...view, todoId: todoIdIn(head), meetingId: meetingIdIn(head), decidedAt: active ? decisions[id].at : null };
     });
 };

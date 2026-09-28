@@ -7,6 +7,8 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { markerLine } from '../src/domain/todo.mjs';
+import { meetingId, meetingPrompt } from '../src/domain/meeting.mjs';
+import { localDate } from '../src/domain/daily-note.mjs';
 
 const HOME = process.env.OFFICE_HOME;
 if (!HOME || path.resolve(HOME) === os.homedir()) {
@@ -113,6 +115,50 @@ const sessions = TITLES.map((title, i) => {
     return { cli, cwd, transcript };
 });
 
+// 회의실: today's facilitator (first prompt = the meeting marker) waiting on the user, plus today's 일지.
+// Demo mode only: --once is the office test's fixture, which counts exactly 10 sessions.
+const MEETING_MESSAGE = `어제 기록 정리했어요.
+
+### 어제 끝낸 일
+1. 뷰에 \`workspace$\` 요약 객체 추가 완료
+2. 주간 회의록 공유 완료
+
+### 못 끝낸 일
+1. 주간 문서 자동화
+   1. 오늘 그대로 이어갈까요?
+2. 채팅 알림 버그
+   1. 원인 조사 중, 이어갈까요?
+
+### 오늘 추천
+1. 결제 모듈 리팩터링
+   1. 어제 칠판에 남은 항목
+2. my-types 패키지 버전 올려 배포
+   1. API가 새 타입을 쓰려면 선배포 필요
+
+오늘 할 일로 확정할 항목을 골라주세요.`;
+const seedMeeting = async () => {
+    const officeDir = path.join(HOME, '.claude/office');
+    const today = localDate(Date.now());
+    const cli = 'cli-10';
+    const transcript = path.join(HOME, '.claude/projects/p', `${cli}.jsonl`);
+    if (!fs.existsSync(transcript)) {
+        const content = meetingPrompt(meetingId(today, 1), path.join(officeDir, 'daily', `${today}.md`));
+        fs.writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`);
+        say(transcript, MEETING_MESSAGE);
+    }
+    fs.writeFileSync(
+        path.join(APP, 'local_10.json'),
+        JSON.stringify({
+            sessionId: 'local_10', cliSessionId: cli, title: '데일리 스크럼 진행자', cwd: officeDir, originCwd: officeDir,
+            worktreePath: null, prs: [], completedTurns: 1, createdAt: Date.now() - 5 * 60_000, lastActivityAt: Date.now(), isArchived: false,
+        }),
+    );
+    hook(cli, 'Stop', officeDir, transcript);
+    // config reads OFFICE_HOME at import time; it is set (checked above), so this writes only under it.
+    const { refreshNote } = await import('../src/usecases/meeting.mjs');
+    refreshNote();
+};
+
 const EVENTS = ['UserPromptSubmit', 'Stop-report', 'Notification', 'Stop-question', 'UserPromptSubmit'];
 const tick = n =>
     sessions.forEach((s, i) => {
@@ -125,6 +171,7 @@ const tick = n =>
 
 tick(0);
 if (!process.argv.includes('--once')) {
+    await seedMeeting();
     const loop = n => setTimeout(() => (tick(n), loop(n + 1)), 8000);
     loop(1);
     console.log(`simulating 10 sessions under ${HOME} (every 8s)`);

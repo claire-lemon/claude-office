@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+export const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const HOME = process.env.OFFICE_HOME || os.homedir();
 export const APP_DIR =
@@ -15,6 +15,9 @@ export const SUMMARY_DIR = path.join(OFFICE_DIR, 'summaries');
 export const DECISIONS_FILE = path.join(OFFICE_DIR, 'decisions.json');
 export const OVERRIDES_FILE = path.join(OFFICE_DIR, 'overrides.json');
 export const TODOS_FILE = path.join(OFFICE_DIR, 'todos.json');
+export const DAILY_DIR = path.join(OFFICE_DIR, 'daily'); // 오늘 일지 YYYY-MM-DD.md
+export const GUIDE_FILE = path.join(OFFICE_DIR, 'CLAUDE.md'); // the facilitator session's instructions
+export const CLI_PATH = path.join(ROOT, 'bin/office.mjs'); // 칠판 CLI, written into the guide
 
 export const PORT = Number(process.env.OFFICE_PORT || 7777);
 export const PUBLIC_DIR = path.join(ROOT, process.env.OFFICE_PUBLIC || 'public');
