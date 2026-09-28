@@ -17,3 +17,10 @@ export const postMove = (id, to) => fetch(`/api/move/${encodeURIComponent(id)}?t
 export const postEdit = (id, patch) => fetch(`/api/edit/${encodeURIComponent(id)}`, {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch),
 });
+// Today's todos (blackboard, docs/specs/2026-09-28-todo-blackboard-design.md §8).
+const jsonInit = (method, body) => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+export const getTodos = () => fetch('/api/todos', { cache: 'no-store' });
+export const postTodo = body => fetch('/api/todos', jsonInit('POST', body));
+export const patchTodo = (id, body) => fetch(`/api/todos/${encodeURIComponent(id)}`, jsonInit('POST', body));
+export const deleteTodo = id => fetch(`/api/todos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const postStart = id => fetch(`/api/start/${encodeURIComponent(id)}`, { method: 'POST' });

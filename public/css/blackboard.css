@@ -1,0 +1,101 @@
+/* blackboard.css: 오늘의 할 일 칠판 on the office's left wall (views/blackboard.js), its width handle and
+   fold strip (views/layout.js), and the 📋 todo tag on kanban cards and the panel. The board is dark in
+   both themes, so its chalk colors are fixed and don't follow the light/dark tokens. */
+  .blackboard{
+    --chalk:#f3efe4; --chalk-dim:#b8c4bd; --chalk-line:rgba(243,239,228,.28); --board:#2f4f3f; --wood:#8a6038; --wood-edge:#5f4027;
+    flex:none; align-self:stretch; width:var(--blackboard-w, 260px); max-width:50%; min-width:200px; min-height:0;
+    display:flex; flex-direction:column;
+    background:var(--board); color:var(--chalk); font-size:12px;
+    border:6px solid var(--wood); border-radius:8px;
+    box-shadow:0 0 0 1px var(--wood-edge), inset 0 0 22px rgba(0,0,0,.35);
+  }
+  .blackboard [hidden]{display:none !important;}
+  .blackboard button{font:inherit; color:inherit; background:none; border:none; padding:0;}
+  .blackboard :focus-visible{outline:1px dashed var(--chalk); outline-offset:1px;}
+
+  .bb-head{display:flex; align-items:center; gap:6px; padding:6px 6px 5px 10px; border-bottom:1px dashed var(--chalk-line);}
+  .bb-title{flex:1; margin:0; font-size:13px; letter-spacing:.03em;}
+  .bb-count{font-size:11px; font-weight:400; color:var(--chalk-dim);}
+  .blackboard .bb-fold{flex:none; width:24px; height:24px; border-radius:6px; color:var(--chalk-dim);}
+  .blackboard .bb-fold:hover{color:var(--chalk); background:rgba(255,255,255,.08);}
+  .bb-strip{display:none;}
+
+  .bb-scroll{flex:1; min-height:0; overflow-y:auto; padding:2px 10px;}
+  .bb-empty{margin:18px 0; text-align:center; font-size:13px; color:var(--chalk-dim);}
+  .bb-list{list-style:none; margin:0; padding:0;}
+  .bb-item{padding:6px 0; border-bottom:1px dashed var(--chalk-line);}
+  .bb-row{display:flex; align-items:flex-start; gap:6px; min-width:0;}
+  .bb-check{appearance:none; flex:none; width:14px; height:14px; margin:1px 0 0; display:grid; place-content:center; border:1.5px solid var(--chalk); border-radius:3px; background:none; cursor:pointer;}
+  .bb-check:checked::after{content:'✓'; font-size:12px; line-height:1; color:var(--chalk);}
+  .bb-name{flex:1; min-width:0; line-height:1.35; overflow-wrap:anywhere; cursor:text; border-radius:4px;}
+  .bb-name[data-editing]{outline:none;}
+  /* memo / trash: shown on hover or focus; a memo with text stays visible so the note is findable */
+  .blackboard .bb-icon{flex:none; padding:0 3px; border-radius:4px; font-size:11px; line-height:16px; color:var(--chalk-dim); opacity:0; transition:opacity .12s ease;}
+  .blackboard .bb-icon:hover{color:var(--chalk);}
+  .bb-item:hover .bb-icon,.bb-item:focus-within .bb-icon,.bb-memo.has-detail,.bb-memo[aria-expanded="true"]{opacity:1;}
+  @media (hover:none){ .blackboard .bb-icon{opacity:1;} } /* touch: nothing to hover */
+  .bb-meta{display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; margin:3px 0 0 20px; font-size:11px; color:var(--chalk-dim); min-width:0;}
+  .bb-proj{min-width:0; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .bb-worker{display:inline-flex; align-items:center; gap:3px; border-radius:8px;}
+  .bb-worker svg{display:block; width:14px; height:20px; shape-rendering:crispEdges;}
+  .blackboard button.bb-worker{cursor:pointer;}
+  button.bb-worker:hover .bb-chip{border-color:currentColor; background:rgba(255,255,255,.08);}
+  /* chalk colors per board column; off-board sessions stay dim */
+  .bb-chip{font-size:10px; line-height:14px; padding:0 5px; border:1px solid var(--chip, var(--chalk-dim)); border-radius:8px; color:var(--chip, var(--chalk-dim)); white-space:nowrap;}
+  .bb-chip[data-state="working"]{--chip:#f5e17a;}
+  .bb-chip[data-state="pending"]{--chip:#f7a9bb;}
+  .bb-chip[data-state="hold"]{--chip:#a9d2ee;}
+  .bb-chip[data-state="done"]{--chip:#b7e2a6;}
+  .blackboard .bb-btn{padding:1px 8px; border:1px solid var(--chalk-dim); border-radius:10px; font-size:11px; line-height:16px; color:var(--chalk); white-space:nowrap;}
+  .blackboard .bb-btn:hover:not(:disabled){border-color:var(--chalk); background:rgba(255,255,255,.08);}
+  .blackboard .bb-btn:disabled{opacity:.6; cursor:default;}
+  .blackboard .bb-ghost{border-color:transparent; color:var(--chalk-dim);}
+  .bb-start{margin-left:auto;}
+  .bb-item.done .bb-name{text-decoration:line-through; text-decoration-thickness:1.5px; color:var(--chalk-dim);}
+  .bb-item.done .bb-meta{opacity:.65;}
+
+  /* inputs written in chalk: the add form, the memo textarea, the title's inline edit */
+  .bb-in,.bb-detail,.blackboard .inline-edit{width:100%; font:inherit; font-size:12px; color:var(--chalk); background:rgba(0,0,0,.22); border:1px solid var(--chalk-line); border-radius:4px; padding:3px 6px; outline:none;}
+  .bb-in:focus,.bb-detail:focus,.blackboard .inline-edit{border-color:var(--chalk);}
+  .bb-in::placeholder,.bb-detail::placeholder{color:var(--chalk-dim); opacity:.8;}
+  .bb-in option{color:#2b2b2b; background:#fff;} /* the dropdown list is drawn by the OS, not on the board */
+  textarea.bb-in,.bb-detail{resize:vertical; min-height:44px; line-height:1.4;}
+  .bb-detail{display:block; width:calc(100% - 20px); margin:4px 0 0 20px;}
+  .bb-add{flex:none; padding:6px 10px 8px; border-top:1px dashed var(--chalk-line);}
+  .blackboard .bb-add-btn{width:100%; text-align:left; padding:2px 0; color:var(--chalk-dim);}
+  .blackboard .bb-add-btn:hover{color:var(--chalk);}
+  .bb-form{display:grid; gap:5px;}
+  .bb-form-btns{display:flex; justify-content:flex-end; gap:6px;}
+
+  .bb-trash{margin:8px 0 6px; font-size:11px; color:var(--chalk-dim);}
+  .bb-trash summary{cursor:pointer;}
+  .bb-trash-list{list-style:none; margin:4px 0 0; padding:0; display:grid; gap:3px;}
+  .bb-trash-list li{display:flex; align-items:center; gap:6px; min-width:0;}
+  .bb-trash-title{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:line-through;}
+  .bb-toast .bb-undo{margin:0; padding:0; border:none; background:none; color:inherit; font:inherit; font-weight:700; text-decoration:underline; cursor:pointer;}
+
+  /* folded: only a narrow vertical "▸ 📋 할 일 N" strip is left, the width handle hides */
+  .office.blackboard-closed .blackboard{width:auto; min-width:0;}
+  .office.blackboard-closed .blackboard > :not(.bb-strip){display:none;}
+  .office.blackboard-closed .blackboard .bb-strip{display:flex; flex:1; align-items:center; gap:4px; padding:10px 3px; writing-mode:vertical-rl; white-space:nowrap; font-size:12px; color:var(--chalk); cursor:pointer;}
+  .office.blackboard-closed .bb-strip:hover{background:rgba(255,255,255,.06);}
+
+  /* width handle (views/layout.js): sits in the office gap between the board and the decor column */
+  .split-x{display:none;}
+  @media (min-width:800px){
+    .split-x{display:block; flex:none; align-self:stretch; width:8px; margin:0 -8px; position:relative; z-index:1; cursor:ew-resize; touch-action:none; outline:none;}
+    .split-x::before{content:''; position:absolute; left:50%; top:50%; width:4px; height:48px; transform:translate(-50%,-50%); border-radius:2px; background:var(--line); transition:background-color .15s ease;}
+    .split-x:hover::before,.split-x:focus-visible::before{background:var(--accent);}
+    .office.blackboard-closed .split-x{display:none;}
+  }
+  /* <800px: the board spans the office width above the desks (office.css wraps the row) */
+  @media (max-width:799.98px){
+    .blackboard{width:100%; max-width:none; min-width:0; flex-basis:100%;}
+    .bb-scroll{max-height:50vh;}
+    .office.blackboard-closed .blackboard{width:100%;}
+    .office.blackboard-closed .blackboard .bb-strip{writing-mode:horizontal-tb; padding:6px 10px;}
+  }
+
+  /* 📋 linked todo on kanban cards (views/board.js) and in the panel sub line (panel/panel.js) */
+  .todo-tag{display:inline-block; max-width:100%; vertical-align:middle; font-size:10px; line-height:14px; padding:1px 6px; border-radius:8px; background:color-mix(in srgb, var(--muted) 18%, transparent); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .kan-todo{display:flex; min-width:0; margin-top:3px;}

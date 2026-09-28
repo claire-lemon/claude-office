@@ -1,6 +1,6 @@
 import { $ } from './lib/dom.js';
 import * as api from './api.js';
-import { state, selected, controls, view } from './store.js';
+import { state, selected, controls, view, todos } from './store.js';
 import * as office from './views/office.js';
 import * as layout from './views/layout.js';
 import * as board from './views/board.js';
@@ -8,6 +8,7 @@ import { mountBoardDnd } from './views/board-dnd.js';
 import { filterById, mountFilters, updateCounters } from './views/filters.js';
 import * as notify from './views/notify.js';
 import * as archive from './views/archive.js';
+import { mountBlackboard, renderBlackboard } from './views/blackboard.js';
 import * as panel from './panel/panel.js';
 import { handleAction } from './panel/footer.js';
 import './views/sprites.js'; // side effect: populates #animal-defs once, before first render
@@ -58,16 +59,31 @@ const applySessions = list => {
   notify.checkNotifications(list);
 };
 
-const poll = async () => {
+// Todos ride the same poll. A failed /api/todos keeps the last lists (board/panel 📋 tags read them too).
+const loadTodos = async () => {
   try {
-    const res = await api.getSessions();
+    const res = await api.getTodos();
     if (!res.ok) return;
     const data = await res.json();
-    applySessions(Array.isArray(data.sessions) ? data.sessions : []);
-    openFromUrl();
+    todos.list = Array.isArray(data.todos) ? data.todos : [];
+    todos.deleted = Array.isArray(data.deleted) ? data.deleted : [];
+    todos.folders = Array.isArray(data.folders) ? data.folders : [];
   } catch {}
 };
+
+const poll = async () => {
+  const [res] = await Promise.all([api.getSessions().catch(() => null), loadTodos()]);
+  try {
+    if (res && res.ok) {
+      const data = await res.json();
+      applySessions(Array.isArray(data.sessions) ? data.sessions : []);
+      openFromUrl();
+    }
+  } catch {}
+  renderBlackboard(todos, state.sessionsById); // after sessions: a linked worker is clickable only while on the board
+};
 controls.poll = poll;
+controls.selectSession = panel.selectSession;
 
 // ?open=<session id>&tab=diff opens that session's panel once (bookmarks, README screenshots).
 const urlOpen = { done: false };
@@ -81,6 +97,7 @@ const openFromUrl = () => {
   if (params.get('tab') === 'diff') panel.setTab('diff');
 };
 
+mountBlackboard($('#blackboard'), { onChange: poll });
 layout.initLayout({ seats: office.SEATS });
 office.updateWindow();
 poll();

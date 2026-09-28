@@ -68,6 +68,52 @@ const mountOfficeSplit = () => {
   apply();
 };
 
+// ---------- blackboard width + fold (docs/specs/2026-09-28-todo-blackboard-design.md §9) ----------
+// Width lives in --blackboard-w on .office; CSS max-width:50% keeps it inside a narrower window
+// while the pref survives. Folding leaves only a "📋 할 일 N" strip (views/blackboard.js).
+const BLACKBOARD = { key: 'office.blackboardW', openKey: 'office.blackboardOpen', initial: 260, min: 200 };
+const bb = { office: null, open: true };
+
+export const isBlackboardOpen = () => bb.open;
+export const setBlackboardOpen = open => {
+  bb.open = open;
+  if (bb.office) bb.office.classList.toggle('blackboard-closed', !open);
+  savePref(BLACKBOARD.openKey, open);
+  refitOffice();
+};
+
+const mountBlackboardSplit = () => {
+  const handle = $('#split-blackboard');
+  const aside = $('#blackboard');
+  const office = aside && aside.closest('.office');
+  if (!handle || !office) return;
+  bb.office = office;
+  bb.open = loadPref(BLACKBOARD.openKey, true) !== false;
+  office.classList.toggle('blackboard-closed', !bb.open);
+  const saved = Number(loadPref(BLACKBOARD.key, BLACKBOARD.initial));
+  const split = { pref: Number.isFinite(saved) && saved > 0 ? saved : BLACKBOARD.initial, start: 0 };
+  const maxW = () => Math.max(BLACKBOARD.min, office.clientWidth * 0.5);
+  const clampW = px => Math.max(BLACKBOARD.min, Math.min(px, maxW()));
+  const apply = () => {
+    const w = Math.round(split.pref);
+    office.style.setProperty('--blackboard-w', `${w}px`);
+    handle.setAttribute('aria-valuemin', String(BLACKBOARD.min));
+    handle.setAttribute('aria-valuemax', String(Math.round(maxW())));
+    handle.setAttribute('aria-valuenow', String(w));
+    refitOffice();
+  };
+  const save = () => savePref(BLACKBOARD.key, Math.round(split.pref));
+  mountSplitter(handle, {
+    axis: 'x',
+    label: '칠판 폭 조정',
+    onStart: () => { split.start = aside.getBoundingClientRect().width; }, // the rendered (clamped) width
+    onMove: dx => { split.pref = clampW(split.start + dx); apply(); },
+    onEnd: save,
+    onReset: () => { split.pref = BLACKBOARD.initial; apply(); save(); },
+  });
+  apply();
+};
+
 // ---------- kanban column widths ----------
 const colTemplate = fracs => fracs.map(f => `minmax(0,${Number(f.toFixed(3))}fr)`).join(' ');
 
@@ -114,6 +160,7 @@ export const mountColumnResize = columnsEl => {
 // ---------- init (main.js, once) ----------
 export const initLayout = ({ seats }) => {
   mountOfficeSplit();
+  mountBlackboardSplit();
   fit.desks = $('#desks');
   fit.colsOptions = [seats.maxPerRow, seats.block];
   const ro = new ResizeObserver(refitOffice);

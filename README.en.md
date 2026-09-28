@@ -63,8 +63,8 @@ hooks/report.mjs        the hook (standalone, no imports, for startup speed)
 src/
   config.mjs            env vars, paths, limits (the only place env vars are read)
   http/                 controller: normalize input → call a use case → respond; Host/Origin checks
-  usecases/             flows: session list, changes, confirm/hold/archive, next task, summary
-  domain/               pure functions: status, report parsing, prompts, diff parsing
+  usecases/             flows: session list, changes, confirm/hold/archive, next task, summary, todo ↔ session links
+  domain/               pure functions: status, report parsing, prompts, diff parsing, todo rules
   sources/              data in/out: app session files, hook state, transcripts, decisions, git
   platform/             OS side effects: open, pbcopy, claude -p
 public/
@@ -72,7 +72,7 @@ public/
   css/                  base · office · board · panel · changes · markdown
   js/                   main → api · store → views/ · panel/
   js/lib/               import-free modules: math (grid-math, markdown) and small DOM helpers (splitter, inline-edit)
-  js/views/             office, board, header. columns.js (columns) and filters.js (filters) are rule tables
+  js/views/             office, board, header, blackboard (blackboard.js). columns.js (columns) and filters.js (filters) are rule tables
   js/panel/             detail panel. actions.js (buttons) is a rule table
 test/unit/              pure-function tests
 test/integration/       server, fixtures, temp git repos
@@ -82,7 +82,7 @@ test/integration/       server, fixtures, temp git repos
 - Rules live in tables. A new column, drop rule, filter, button, or editable field is one more row (where: [design §4](docs/specs/2026-09-28-board-interactions-design.md#4-확장-지점-나중에-기능을-붙이는-곳), Korean).
 - The server (`src/domain/board.mjs`) decides which column a session is in and where it may be dropped, and sends that as `column` and `moves`. The page only displays it.
 - File writes and OS commands live only in `sources/` and `platform/`.
-- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md)
+- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md)
 
 ## Try the demo first (touches no real settings)
 
@@ -124,6 +124,25 @@ Hooks only see turns that start **after** installation. Older sessions active in
 
 - **Filter**: click the **결재 대기** (awaiting approval) or **보류** (hold) count in the header to see only those sessions (just their desks, and that one column, wide). Click **출근** (checked in) to see everyone again.
 
+## Today's todo blackboard
+
+A chalkboard on the office's left wall holds today's todos. Each item has a **시작** (start) button that opens a new session for that job — like assigning a PR to an issue.
+
+1. **+ 할 일 추가** (add): title, project folder (pick one of the folders recent sessions used, or type a path), optional notes. Enter saves, Esc cancels.
+2. **Start** opens a new-session input box with the prompt filled in (just press Enter). Its first line is `📋 오늘의 할 일 #todo-a1b2c3 · <title>`; the server finds that marker in the session's transcript and links the session to the todo. Sessions started from it with "다음 작업 ▶ 진행" inherit the marker and stay linked.
+3. The linked worker's face and a status chip appear on the item; clicking it opens that session's panel. Board cards and the panel show a 📋 tag too.
+4. Todo status is computed by the server from the linked session.
+
+   | Linked session | Todo |
+   |---|---|
+   | none | open |
+   | working · awaiting approval · on hold · stale | in progress |
+   | confirmed · archived | done (struck through for the rest of the day, hidden after midnight) |
+   | manual check / uncheck | whichever is newer, the check or the session decision, wins |
+
+5. Deleting can be undone for 5 seconds; the board folds (▾) and its width is draggable.
+6. Storage is one file, `~/.claude/office/todos.json`. Links and status are never stored — they are derived on every read.
+
 ## Detail panel
 
 - **Report tab**: the approval report rendered as markdown. Each "다음 작업" (next task) item has its own **▶ 진행** (run) button.
@@ -159,7 +178,7 @@ Hooks only see turns that start **after** installation. Older sessions active in
 node install.mjs --uninstall
 ```
 
-Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office`. The dashboard only reads app data and sessions, so nothing else changes.
+Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office` (decisions, renames and todos live there). The dashboard only reads app data and sessions, so nothing else changes.
 
 ## Tests
 
@@ -173,5 +192,6 @@ node scripts/metrics.mjs
 - Session titles and chat deep links come from the desktop app's internal files (`~/Library/Application Support/Claude/claude-code-sessions`). They are not a public API. If an app update changes them, titles fall back to folder names and deep links disappear. State tracking keeps working because it uses hooks.
 - Hooks are registered with this folder's absolute path. If you move the folder, run `node install.mjs` again. Until you do, the hook exits with an error; sessions keep working but may show a hook error.
 - No deep link that fills an existing chat's input box was found in the app, so confirm goes through the clipboard (⌘V, Enter). New sessions use the `claude://code/new?q=…` deep link, which fills the input box without sending it.
+- Todo ↔ session links rely on the `#todo-…` marker in a new session's first prompt. Delete that line before sending and the session won't link (start it from the blackboard again).
 - Dragging cards needs a mouse. From the keyboard, the detail panel's hold / unhold / confirm buttons do the same.
 - The dashboard parses the Korean `## 결재 보고` heading and its sub-headings exactly as written.

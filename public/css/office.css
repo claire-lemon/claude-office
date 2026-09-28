@@ -16,6 +16,7 @@
   .desks{flex:1; min-width:0; display:grid; grid-template-columns:repeat(var(--desk-cols, 5), minmax(0, var(--desk-w, 104px))); justify-content:center; gap:8px;}
   .desks-empty{grid-column:1 / -1; margin:0; padding:24px 0; text-align:center;}
   @media (min-width:800px){ .office{margin-bottom:0; overflow-y:auto;} } /* min-size desks scroll inside the office */
+  @media (max-width:799.98px){ .office{flex-wrap:wrap;} } /* the blackboard takes its own row above the desks (blackboard.css) */
   /* phones: no decor column, bubbles shrink to their icon so they don't cover the animals */
   @media (max-width:640px){ .office-decor{display:none;} .bubble .b-text,.bubble .b-paper{display:none;} }
   .desk{position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:6px 6px 8px; display:flex; flex-direction:column; align-items:center; min-width:0;}

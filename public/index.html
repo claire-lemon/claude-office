@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="css/panel.css">
 <link rel="stylesheet" href="css/markdown.css">
 <link rel="stylesheet" href="css/changes.css">
+<link rel="stylesheet" href="css/blackboard.css">
 </head>
 <body>
 <header class="topbar">
@@ -21,6 +22,8 @@
 <div class="stage">
   <div class="main-col">
     <section class="office" aria-label="사무실">
+      <aside class="blackboard" id="blackboard" aria-label="오늘의 할 일"></aside><!-- views/blackboard.js -->
+      <div class="split-x" id="split-blackboard"></div>
       <div class="office-decor">
         <svg id="window-svg" class="decor window" viewBox="0 0 100 70" aria-hidden="true">
           <rect x="2" y="2" width="96" height="66" rx="4" class="frame"/>

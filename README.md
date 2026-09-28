@@ -62,8 +62,8 @@ hooks/report.mjs        hook (실행 속도 때문에 의존성 없이 단독)
 src/
   config.mjs            환경변수·경로·한도 (환경변수는 여기서만 읽음)
   http/                 controller: 입력 정리 → use-case 호출 → 응답, Host/Origin 검사
-  usecases/             흐름: 세션 목록, 변경사항, 컨펌·보류·아카이브, 다음 작업, 요약
-  domain/               순수 함수: 상태 판정, 보고서 파싱, 프롬프트, diff 파싱
+  usecases/             흐름: 세션 목록, 변경사항, 컨펌·보류·아카이브, 다음 작업, 요약, 할 일·세션 연결
+  domain/               순수 함수: 상태 판정, 보고서 파싱, 프롬프트, diff 파싱, 할 일 규칙
   sources/              데이터 읽기·쓰기: 앱 세션 파일, hook 상태, 대화 기록, 결정, git
   platform/             OS 부수효과: open, pbcopy, claude -p
 public/
@@ -71,7 +71,7 @@ public/
   css/                  base · office · board · panel · changes · markdown
   js/                   main → api · store → views/ · panel/
   js/lib/               import 없는 모듈: 계산(grid-math, markdown)과 작은 DOM 도구(splitter, inline-edit)
-  js/views/             사무실·결재함·헤더. columns.js(칸)·filters.js(필터)는 규칙 표
+  js/views/             사무실·결재함·헤더·칠판(blackboard.js). columns.js(칸)·filters.js(필터)는 규칙 표
   js/panel/             상세 패널. actions.js(버튼)는 규칙 표
 test/unit/              순수 함수 테스트
 test/integration/       서버·fixture·임시 git 레포 테스트
@@ -81,7 +81,7 @@ test/integration/       서버·fixture·임시 git 레포 테스트
 - 규칙은 표로 둔다. 새 칸·드래그 규칙·필터·버튼·편집 필드는 표에 한 줄을 더하면 된다(고칠 곳: [설계 §4](docs/specs/2026-09-28-board-interactions-design.md#4-확장-지점-나중에-기능을-붙이는-곳)).
 - 세션이 어느 칸에 있고 어디로 옮길 수 있는지는 서버(`src/domain/board.mjs`)가 계산해 `column`, `moves`로 내려준다. 화면은 그대로 보여주기만 한다.
 - 파일 쓰기와 OS 명령은 `sources/`와 `platform/`에만 있다.
-- 설계 문서: [레이어·상세 패널](docs/specs/2026-09-28-layering-and-panel-design.md), [결재함 상호작용](docs/specs/2026-09-28-board-interactions-design.md)
+- 설계 문서: [레이어·상세 패널](docs/specs/2026-09-28-layering-and-panel-design.md), [결재함 상호작용](docs/specs/2026-09-28-board-interactions-design.md), [오늘의 할 일 칠판](docs/specs/2026-09-28-todo-blackboard-design.md)
 
 ## 먼저 데모로 보기 (실제 설정 안 건드림)
 
@@ -123,6 +123,25 @@ hooks는 설치 **이후** 시작된 턴부터 잡힌다. 설치 전 세션은 2
 
 - **필터**: 헤더의 **결재 대기**·**보류** 숫자를 누르면 그 세션만 보인다(사무실은 해당 책상만, 결재함은 그 칸만 넓게). **출근**을 누르면 전체로 돌아온다.
 
+## 오늘의 할 일 칠판
+
+사무실 왼쪽 벽의 칠판에 오늘 할 일을 적고, 항목마다 **시작**을 누르면 그 일을 맡을 새 세션이 열린다. 할 일(이슈)에 세션(PR)을 다는 느낌이다.
+
+1. **+ 할 일 추가**: 제목, 프로젝트 폴더(최근 세션들이 쓴 폴더 중 선택 또는 직접 입력), 세부 메모. Enter 저장, Esc 취소.
+2. **시작**: 프롬프트가 채워진 새 세션 입력창이 열린다(Enter만 누르면 됨). 첫 줄이 `📋 오늘의 할 일 #todo-a1b2c3 · 제목`이고, 서버가 그 표식으로 세션을 할 일에 연결한다. 그 세션에서 "다음 작업 ▶ 진행"으로 이어진 세션도 같은 할 일에 붙는다.
+3. 연결된 워커 얼굴과 상태 칩이 항목에 붙고, 클릭하면 그 세션 패널이 열린다. 결재함 카드와 패널에도 📋 태그가 보인다.
+4. 할 일 상태는 서버가 연결 세션에서 계산한다.
+
+   | 연결 세션 | 할 일 |
+   |---|---|
+   | 없음 | 대기 |
+   | 작업 중 · 결재 대기 · 보류 · 오래된 세션 | 진행 중 |
+   | 컨펌 · 아카이브 | 완료 (당일만 취소선으로 보이고 자정 이후 숨김) |
+   | 체크박스 수동 체크/해제 | 세션 결정과 겨루면 더 최근 것이 우선 |
+
+5. 삭제는 5초 안에 **되돌리기**할 수 있고, 칠판은 접거나(▾) 책상과의 경계를 끌어 폭을 바꿀 수 있다.
+6. 저장은 `~/.claude/office/todos.json` 하나다. 세션 연결과 상태는 저장하지 않고 매번 계산한다.
+
 ## 상세 패널
 
 - **보고서 탭**: 결재 보고를 마크다운으로 보여준다. "다음 작업"은 항목마다 **▶ 진행** 버튼이 있다.
@@ -149,7 +168,7 @@ hooks는 설치 **이후** 시작된 턴부터 잡힌다. 설치 전 세션은 2
 node install.mjs --uninstall
 ```
 
-그리고 `~/.claude/CLAUDE.md`의 결재 보고 블록 삭제, `rm -rf ~/.claude/office`. 앱 데이터와 세션은 읽기만 하므로 영향 없음.
+그리고 `~/.claude/CLAUDE.md`의 결재 보고 블록 삭제, `rm -rf ~/.claude/office`(결정·이름·할 일 파일 포함). 앱 데이터와 세션은 읽기만 하므로 영향 없음.
 
 ## 검증
 
@@ -163,5 +182,6 @@ node scripts/metrics.mjs
 - 세션 제목·딥링크는 앱 내부 파일(`~/Library/Application Support/Claude/claude-code-sessions`)에서 읽는다. 공개 API가 아니라 앱 업데이트로 바뀌면 제목이 폴더명으로, 딥링크가 사라진다(상태 추적은 hooks라 유지).
 - hooks 경로는 이 폴더의 절대경로로 등록된다. 폴더를 옮기거나 워크트리를 지우면 `node install.mjs`를 다시 실행해야 한다(파일이 없으면 hook이 exit 1로 끝나 세션은 계속 동작하지만 hook 오류 표시가 뜰 수 있다).
 - 앱의 기존 세션 입력창을 채우는 딥링크를 앱 코드에서 찾지 못해서, 컨펌은 클립보드 복사 + 채팅방 열기(⌘V, Enter)로 전달한다. 새 세션은 `claude://code/new?q=…` 딥링크로 입력창을 채운다(Enter만 누르면 됨).
+- 할 일↔세션 연결은 새 세션 첫 프롬프트의 `#todo-…` 표식으로 잡는다. 표식 줄을 지우고 보내면 연결되지 않는다(칠판에서 다시 시작하면 됨).
 - 카드 끌어 옮기기는 마우스 전용이다. 키보드로는 상세 패널의 보류·보류 해제·컨펌 버튼으로 같은 일을 한다.
 - 화면과 보고 규칙은 한국어다. 대시보드는 `## 결재 보고` 제목과 소제목을 그대로 파싱한다.

@@ -9,6 +9,8 @@ export const activeTabState = { tab: 'report' };
 export const view = { filter: 'all' };
 // Card being dragged on the board; set = board renders are skipped (moving DOM cancels the drag).
 export const drag = { id: null };
+// Today's todos from the last /api/todos poll (views/blackboard.js; board/panel read titles for 📋 tags).
+export const todos = { list: [], deleted: [], folders: [] };
 
 // Small ref-cell registry: panel/footer.js and views/archive.js need to trigger an immediate
 // poll or close the panel after an action, but importing main.js/panel.js directly for that
@@ -16,4 +18,5 @@ export const drag = { id: null };
 export const controls = {
   poll: () => {},
   closePanel: () => {},
+  selectSession: () => {}, // views/blackboard.js opens a linked worker's panel
 };

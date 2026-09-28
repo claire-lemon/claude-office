@@ -2,7 +2,7 @@ import { $ } from '../lib/dom.js';
 import { inlineEdit } from '../lib/inline-edit.js';
 import * as api from '../api.js';
 import { safeAnimal, ANIMAL_LABELS } from '../views/sprites.js';
-import { state, selected, activeTabState, controls } from '../store.js';
+import { state, selected, activeTabState, controls, todos } from '../store.js';
 import { renderPanelActions, closeFooterMenus } from './footer.js';
 import { renderReportPane } from './report-tab.js';
 import { setTab } from './changes-tab.js';
@@ -25,6 +25,9 @@ const diffStatHtml = session => {
   return `<span class="ds-add">+${add}</span> <span class="ds-del">−${del}</span> · ${files}개 파일${warn}`;
 };
 
+// Same lookup as views/board.js (views/ and panel/ don't import each other).
+const todoTitle = id => todos.list.find(t => t.id === id)?.title ?? '할 일';
+
 // Name: shown as text, click/Enter/F2 turns it into an input (§5.5). Every 2s poll re-renders
 // the header, so the name is left alone while an edit is open.
 const nameEl = $('#panel-name');
@@ -41,7 +44,9 @@ const renderPanelHeader = session => {
   $('#panel-animal').innerHTML = `<svg viewBox="0 0 24 34"><use href="#animal-${safeAnimal(session.animal)}"/></svg>`;
   renderPanelName(session);
   const prLabel = (session.prs && session.prs.length) ? prStateLabel(session.prs[0].state) : '-';
-  $('#panel-sub').textContent = `${ANIMAL_LABELS[safeAnimal(session.animal)]} · ${session.branch || '-'} · PR ${prLabel} · ${session.turns ?? '-'}턴`;
+  const sub = $('#panel-sub');
+  sub.textContent = `${ANIMAL_LABELS[safeAnimal(session.animal)]} · ${session.branch || '-'} · PR ${prLabel} · ${session.turns ?? '-'}턴`;
+  if (session.todoId) sub.append(' · ', Object.assign(document.createElement('span'), { className: 'todo-tag', textContent: `📋 ${todoTitle(session.todoId)}` }));
   const loc = $('#panel-loc');
   loc.replaceChildren(...[
     ['📁 프로젝트', session.projectPath],
