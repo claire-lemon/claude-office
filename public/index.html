@@ -14,11 +14,7 @@
 <body>
 <header class="topbar">
   <h1>오늘의 사무실</h1>
-  <div class="counters">
-    <div class="counter" id="cnt-checkin"><span class="num">0</span><span class="label">출근</span></div>
-    <div class="counter" id="cnt-pending"><span class="num">0</span><span class="label">결재 대기</span></div>
-    <div class="counter" id="cnt-hold"><span class="num">0</span><span class="label">보류</span></div>
-  </div>
+  <div class="counters" role="group" aria-label="필터"></div><!-- buttons from views/filters.js FILTERS -->
   <button id="archive-open" class="icon-btn archive-btn" type="button" title="보관함">🗄️ 보관함</button>
   <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" title="알림 소리">🔔</button>
 </header>
@@ -51,12 +47,7 @@
     <div class="split-y" id="split-office"></div>
     <section class="kanban" aria-label="결재함">
       <h2>결재함</h2>
-      <div class="kan-columns">
-        <div class="kan-col" data-col="working"><h3>작업 중</h3><div class="kan-list" id="col-working"></div></div>
-        <div class="kan-col" data-col="pending"><h3>결재 대기</h3><div class="kan-list" id="col-pending"></div></div>
-        <div class="kan-col" data-col="hold"><h3>보류</h3><div class="kan-list" id="col-hold"></div></div>
-        <div class="kan-col" data-col="done"><h3 class="col-head">완료 <button type="button" class="col-btn" id="archive-done" hidden>모두 아카이브</button></h3><div class="kan-list" id="col-done"></div></div>
-      </div>
+      <div class="kan-columns"></div><!-- columns from views/columns.js COLUMNS -->
     </section>
   </div>
 </div>

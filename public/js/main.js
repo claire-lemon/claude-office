@@ -1,9 +1,11 @@
 import { $ } from './lib/dom.js';
 import * as api from './api.js';
-import { state, selected, controls } from './store.js';
+import { state, selected, controls, view } from './store.js';
 import * as office from './views/office.js';
 import * as layout from './views/layout.js';
 import * as board from './views/board.js';
+import { mountBoardDnd } from './views/board-dnd.js';
+import { filterById, mountFilters, updateCounters } from './views/filters.js';
 import * as notify from './views/notify.js';
 import * as archive from './views/archive.js';
 import * as panel from './panel/panel.js';
@@ -34,12 +36,24 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && selected.id) panel.closePanel();
 });
 
+// ---------- render (poll, filter change, drag end) ----------
+// From the last polled list (sessionsById keeps its order). The filter narrows the office and the
+// board; counters always count the full list and the open panel is left alone.
+const render = () => {
+  const list = [...state.sessionsById.values()];
+  const f = filterById(view.filter);
+  if (f.id === 'all') office.renderOffice(list);
+  else office.renderOffice(list.filter(f.match), { showEmpty: false });
+  board.renderKanban(list, f);
+  updateCounters(list);
+};
+mountFilters($('.counters'), render);
+mountBoardDnd($('.kan-columns'), { onEnd: render });
+
 // ---------- poll loop ----------
 const applySessions = list => {
   state.sessionsById = new Map(list.map(s => [s.id, s]));
-  office.renderOffice(list);
-  board.renderKanban(list);
-  board.updateCounters(list);
+  render();
   panel.updatePanelOnPoll();
   notify.checkNotifications(list);
 };

@@ -1,20 +1,27 @@
-import { $ } from '../lib/dom.js';
+import { $, escapeHtml } from '../lib/dom.js';
 import { safeAnimal } from './sprites.js';
-import { selected } from '../store.js';
+import { selected, drag } from '../store.js';
+import { COLUMNS } from './columns.js';
+import { mountColumnResize } from './layout.js';
 
 // ---------- kanban ----------
-const KAN_COLUMNS = ['working','pending','hold','done'];
-const colEl = { working:$('#col-working'), pending:$('#col-pending'), hold:$('#col-hold'), done:$('#col-done') };
-const cardEls = new Map();
-
-const classifyColumn = s => {
-  if (s.status === 'working') return 'working';
-  // blocked (permission/input needed) also waits on the lead, so it sits in 결재 대기 with a red tag.
-  if (s.status === 'review' || s.status === 'question' || s.status === 'blocked') return 'pending';
-  if (s.status === 'hold') return 'hold';
-  if (s.status === 'done') return 'done';
-  return null;
+// Columns come from the COLUMNS table; which column a session sits in comes from the server
+// (session.column). Each .kan-col stays a direct child of .kan-columns: layout.js puts the column
+// width handles inside them, so later renders only touch the .kan-list.
+const kanbanEl = $('.kanban');
+const columnsEl = $('.kan-columns');
+const buildColumn = c => {
+  const el = document.createElement('div');
+  el.className = 'kan-col';
+  el.dataset.col = c.id;
+  const btn = c.headerAction ? `<button type="button" class="col-btn" id="${escapeHtml(c.headerAction.id)}" hidden>${escapeHtml(c.headerAction.label)}</button>` : '';
+  el.innerHTML = `<h3 class="col-head">${escapeHtml(c.label)}${btn}</h3><div class="kan-list"></div>`;
+  return { def: c, el, list: el.querySelector('.kan-list'), btn: el.querySelector('.col-btn') };
 };
+const columns = COLUMNS.map(buildColumn);
+columnsEl.replaceChildren(...columns.map(c => c.el));
+mountColumnResize(columnsEl);
+const cardEls = new Map();
 
 const elapsed = ms => {
   const m = Math.floor(Math.max(ms,0)/60000);
@@ -58,6 +65,7 @@ const buildCard = session => {
   const card = document.createElement('div');
   card.className = 'kan-card';
   card.dataset.id = session.id;
+  card.draggable = true; // views/board-dnd.js
   card.innerHTML = `<div class="kan-top"><span class="kan-avatar"><svg viewBox="0 0 24 34"><use href="#animal-${safeAnimal(session.animal)}"/></svg></span><span class="kan-title"></span><span class="kan-tag hidden"></span></div><div class="kan-loc"><div class="loc-proj"></div><div class="loc-branch"></div><div class="loc-cwd"></div></div><div class="kan-meta"></div><div class="kan-diffstat hidden"></div>`;
   return card;
 };
@@ -86,30 +94,29 @@ const updateCard = (card, session) => {
   card.classList.toggle('selected', session.id === selected.id);
 };
 
-export const renderKanban = sessions => {
-  const buckets = { working:[], pending:[], hold:[], done:[] };
-  sessions.forEach(s => { const c = classifyColumn(s); if (c) buckets[c].push(s); });
-  const PENDING_ORDER = { blocked:0, review:1, question:2 };
-  buckets.pending.sort((a,b) => PENDING_ORDER[a.status] - PENDING_ORDER[b.status]);
-  KAN_COLUMNS.forEach(col => {
-    buckets[col].forEach(session => {
+// filter: views/filters.js row. Cards only where filter.match; filter.columns hides the other
+// columns, and a lone column spreads its cards over a grid (board.css .kanban.single).
+export const renderKanban = (sessions, filter) => {
+  if (drag.id) return; // moving DOM mid-drag cancels the HTML5 drag; dragend re-renders
+  const visible = columns.filter(c => !filter.columns || filter.columns.includes(c.def.id));
+  kanbanEl.classList.toggle('single', visible.length === 1);
+  const present = new Set();
+  columns.forEach(c => {
+    const shown = visible.includes(c);
+    c.el.hidden = !shown;
+    const cards = shown ? sessions.filter(s => s.column === c.def.id && filter.match(s)) : [];
+    if (c.def.sort) cards.sort(c.def.sort);
+    cards.forEach(session => {
       const existing = cardEls.get(session.id);
       const card = existing || buildCard(session);
       if (!existing) cardEls.set(session.id, card);
       updateCard(card, session);
-      colEl[col].appendChild(card);
+      c.list.appendChild(card);
+      present.add(session.id);
     });
+    if (c.btn) c.btn.hidden = !cards.length;
   });
-  $('#archive-done').hidden = !buckets.done.length;
-  const present = new Set(KAN_COLUMNS.flatMap(c => buckets[c].map(s => s.id)));
   Array.from(cardEls.keys()).forEach(id => {
     if (!present.has(id)) { cardEls.get(id).remove(); cardEls.delete(id); }
   });
-};
-
-// ---------- counters (header) ----------
-export const updateCounters = list => {
-  $('#cnt-checkin .num').textContent = String(list.length);
-  $('#cnt-pending .num').textContent = String(list.filter(s => s.status==='review'||s.status==='question').length);
-  $('#cnt-hold .num').textContent = String(list.filter(s => s.status==='hold').length);
 };

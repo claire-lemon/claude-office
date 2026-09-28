@@ -32,6 +32,11 @@
   .counter .label{font-size:11px; color:var(--muted);}
   #cnt-pending .num{color:var(--warn);}
   #cnt-hold .num{color:var(--muted);}
+  /* counters are filter buttons (views/filters.js): button chrome reset so they look as before; only a
+     real filter (not 출근) shows pressed */
+  button.counter{margin:0; color:inherit; line-height:inherit; appearance:none; transition:border-color .15s ease, box-shadow .15s ease;}
+  button.counter:hover{border-color:var(--muted);}
+  button.counter[aria-pressed="true"]{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent);}
   .icon-btn.archive-btn{width:auto; padding:0 12px; font-size:13px; white-space:nowrap;}
   .archive-dialog{border:1px solid var(--line); border-radius:16px; padding:0; width:min(760px, 94vw); max-height:80vh; background:var(--bg-panel); color:var(--ink);}
   .archive-dialog::backdrop{background:rgba(30,20,12,.38);}

@@ -14,6 +14,9 @@
     .kan-list{flex:1; min-height:0; overflow-y:auto; padding:2px; margin:-2px;} /* padding keeps the .selected outline unclipped */
   }
   .kanban.single .kan-columns{grid-template-columns:minmax(0,1fr);}
+  .kan-col[hidden]{display:none;} /* ≥800px .kan-col is display:flex, which beats the hidden attribute */
+  /* one column left by a filter: its cards spread over a grid */
+  .kanban.single .kan-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); align-content:start; gap:8px;}
   /* column width handle: sits in the 10px gap right of each column but the last */
   .col-handle{display:none;}
   @media (min-width:800px){
@@ -22,6 +25,7 @@
   }
   .kanban.single .col-handle{display:none;}
   .kan-card{background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:6px 8px; cursor:pointer; min-width:0;}
+  .kan-card[draggable="true"]{cursor:grab;}
   .kan-card:hover{box-shadow:var(--shadow);}
   .kan-card.selected{outline:2px solid var(--accent);}
   .kan-top{display:flex; align-items:center; gap:6px; min-width:0;}
@@ -38,3 +42,11 @@
   .ds-add{color:var(--good); font-weight:700;}
   .ds-del{color:var(--bad); font-weight:700;}
   .tag-warn{display:inline-block; background:var(--warn); color:#fff; font-size:10px; padding:1px 6px; border-radius:8px; margin-left:4px;}
+  /* card drag (views/board-dnd.js): dashed drop zones with the move label, others dimmed. Outline and
+     an overlay only, so nothing shifts under the pointer mid-drag. */
+  .kan-col{position:relative;}
+  .kan-col.drop-ok{outline:2px dashed var(--accent); outline-offset:-2px;}
+  .kan-col.drop-ok::after{content:attr(data-hint); position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; border-radius:inherit; background:color-mix(in srgb, var(--card) 72%, transparent); color:var(--ink); font-size:13px; font-weight:700; pointer-events:none;}
+  .kan-col.drop-over{outline-style:solid;}
+  .kan-col.drop-over::after{background:color-mix(in srgb, var(--accent) 22%, transparent);}
+  .kan-col.drop-no{opacity:.45;}

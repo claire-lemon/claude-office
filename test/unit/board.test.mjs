@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { columnOf, movesFor, resolveMove } from '../../src/domain/board.mjs';
+import { COLUMN_OF, MOVE_RULES, columnOf, movesFor, resolveMove } from '../../src/domain/board.mjs';
+import { COLUMNS, MOVE_HINT, MOVE_TOAST } from '../../public/js/views/columns.js';
 
 test('columnOf: every status', () => {
     assert.equal(columnOf('working'), 'working');
@@ -39,4 +40,25 @@ test('resolveMove: finds the move for a column or null', () => {
     assert.equal(resolveMove(moves, 'working'), null);
     assert.equal(resolveMove(moves, null), null);
     assert.equal(resolveMove(movesFor({ status: 'working', baseStatus: 'working' }), 'done'), null);
+});
+
+// The client tables must follow the server rules: a column or action added on one side only would
+// render nowhere or drop with no label.
+test('client COLUMNS ids = server column ids', () => {
+    const ids = COLUMNS.map(c => c.id);
+    assert.equal(new Set(ids).size, ids.length, 'unique column ids');
+    assert.deepEqual(new Set(ids), new Set(Object.values(COLUMN_OF)));
+});
+
+test('every server move action has a drag hint and a toast', () => {
+    MOVE_RULES.forEach(r => {
+        assert.ok(MOVE_HINT[r.action], `MOVE_HINT.${r.action}`);
+        assert.ok(MOVE_TOAST[r.action], `MOVE_TOAST.${r.action}`);
+    });
+});
+
+test('client pending sort: blocked, review, question', () => {
+    const pending = COLUMNS.find(c => c.id === 'pending');
+    const list = ['question', 'review', 'blocked', 'review'].map((status, i) => ({ id: String(i), status }));
+    assert.deepEqual([...list].sort(pending.sort).map(s => s.status), ['blocked', 'review', 'review', 'question']);
 });
