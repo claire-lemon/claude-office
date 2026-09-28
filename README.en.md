@@ -133,7 +133,7 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
 
 1. **+ 할 일 추가** (add): title, project folder (pick one of the folders recent sessions used, or type a path), optional notes. Enter saves, Esc cancels.
 2. **Start** opens a new-session input box with the prompt filled in (just press Enter). Its first line is `📋 오늘의 할 일 #todo-a1b2c3 · <title>`; the server finds that marker in the session's transcript and links the session to the todo. Sessions started from it with "다음 작업 ▶ 진행" inherit the marker and stay linked.
-3. The linked worker's face and a status chip appear on the item; clicking it opens that session's panel. Board cards and the panel show a 📋 tag too.
+3. The linked worker's face and a status chip appear on the item; clicking it opens that session's panel. Board cards and the panel show a 📋 tag too. When several sessions worked on one todo (a restart, a follow-up session), **+n** next to the chip expands the earlier ones, oldest first.
 4. Todo status is computed by the server from the linked session.
 
    | Linked session | Todo |
@@ -144,13 +144,13 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
    | manual check / uncheck | whichever is newer, the check or the session decision, wins |
 
 5. Deleting can be undone for 5 seconds; the board folds (▾) and its width is draggable.
-6. Storage is one file, `~/.claude/office/todos.json`. Links and status are never stored — they are derived on every read.
+6. Todos are stored in `~/.claude/office/todos.json`. Links and status are derived from transcripts on every read, and every link seen once is also snapshotted in `links.json`: Claude Code deletes transcripts after 30 days, and the snapshot keeps a todo's session history and done state after that (while a transcript exists, it always wins).
 
 ## Meeting room (daily scrum)
 
 **🏫 회의실** in the header switches the screen to the meeting room: the todo blackboard on the left, the facilitator's seat on the right. It is where yesterday gets summarized and today's todos get brainstormed.
 
-1. **회의 시작** (start): the server writes today's note, `~/.claude/office/daily/YYYY-MM-DD.md` (sessions active since yesterday 00:00 with status, one-line summary and next-task suggestions; the blackboard as it is; recent project folders), then opens a new-session input for the facilitator (just press Enter).
+1. **회의 시작** (start): the server writes today's note, `~/.claude/office/daily/YYYY-MM-DD.md` (sessions active since yesterday 00:00 with status, one-line summary and next-task suggestions; the blackboard as it is; a todo history since yesterday 00:00 with every session each todo went through, done and deleted ones included; recent project folders), then opens a new-session input for the facilitator (just press Enter).
 2. **The facilitator is a real Claude Code session.** It first reads the guide file named in its prompt, `~/.claude/office/CLAUDE.md` (managed by the server), and follows it (the app may open the session in a scratch workspace, so the guide is not left to the folder's CLAUDE.md). It reads only today's note and what you say; no repo or vault digging, no code edits, no git. Its first message lists "finished yesterday / not finished / suggested for today", and the conversation happens in the app's chat.
 3. Agreed items are written by the facilitator through the **blackboard CLI** (you can use it too):
    ```bash
@@ -192,7 +192,7 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
 
 - **보류** (hold) moves the card to the hold column and does nothing else. Held cards stay on the board past 24 hours.
 - **아카이브** (archive) removes the card from the office and the board. **모두 아카이브** (archive all) in the done column's header clears that column in one click.
-- **🗄️ 보관함** (archive list, in the header) lists archived work as name · date · one-line summary. **복구** (restore) puts it back in the hold column.
+- **🗄️ 보관함** (archive list, in the header) lists archived work as name · date · one-line summary. **복구** (restore) puts it back in the hold column. Below it, **지난 할 일** (past todos) keeps the todos that left the blackboard (done before today, or deleted) with their result and the sessions they went through (joined with →).
 - If you send a new prompt to a held, archived, or confirmed session, it returns to its normal state automatically.
 
 ## Uninstall
