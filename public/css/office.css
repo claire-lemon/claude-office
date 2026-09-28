@@ -1,0 +1,53 @@
+/* office.css: office section, desk/character svg poses, speech bubbles, day/night window */
+  .office{background:var(--bg-panel); border:1px solid var(--line); border-radius:16px; padding:12px; position:relative; display:flex; gap:12px; align-items:flex-start; margin-bottom:12px;}
+  .office-decor{display:flex; flex-direction:column; align-items:center; gap:8px; flex:none;}
+  .decor{display:block;}
+  .window{width:64px; height:42px;}
+  .window .frame{fill:var(--desk-edge);}
+  .window .sky{fill:var(--sky-day);}
+  .window.night .sky{fill:var(--sky-night);}
+  .window .moon,.window .star{display:none;}
+  .window.night .sun{display:none;}
+  .window.night .moon,.window.night .star{display:block;}
+  .window .mullion{stroke:var(--desk-edge); stroke-width:2;}
+  .plant{width:28px; height:42px;}
+
+  /* ponytail: desks capped at 104px so 2 rows stay ~330px tall; the approval board is the main view */
+  .desks{flex:1; min-width:0; display:grid; grid-template-columns:repeat(5,minmax(0,104px)); justify-content:center; gap:8px;}
+  @media (min-width:1280px){ .desks{grid-template-columns:repeat(10,minmax(0,104px));} }
+  /* phones: no decor column, bubbles shrink to their icon so they don't cover the animals */
+  @media (max-width:640px){ .office-decor{display:none;} .bubble .b-text,.bubble .b-paper{display:none;} }
+  .desk{position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:6px 6px 8px; display:flex; flex-direction:column; align-items:center; min-width:0;}
+  .desk.occupied{cursor:pointer;}
+  .desk.occupied:hover{box-shadow:var(--shadow); transform:translateY(-1px);}
+  .desk-visual{width:100%; aspect-ratio:64/86;}
+  .desk-visual svg{width:100%; height:100%; shape-rendering:crispEdges;}
+  .nameplate{margin-top:2px; font-size:11px; font-weight:600; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:1px 6px; background:var(--bg); border-radius:6px;}
+  .empty-label{font-size:11px; color:var(--muted); margin-top:6px;}
+  .desk:not(.empty) .empty-label{display:none;}
+  .desk.empty .nameplate,.desk.empty .bubble-slot{display:none;}
+  .char-group.grayscale{filter:grayscale(1) opacity(.55);}
+  .bubble-slot{position:absolute; top:-6px; left:0; right:0; z-index:2; display:flex; justify-content:flex-end; padding-right:2px; min-width:0;}
+  .bubble{display:flex; flex-wrap:wrap; align-items:center; gap:3px; max-width:100%; min-width:0; background:var(--bubble-bg); border:1px solid var(--line); border-radius:10px; padding:2px 6px; font-size:10px; box-shadow:var(--shadow); white-space:normal; overflow-wrap:break-word; line-height:1.25;}
+  .bubble-danger{background:var(--bubble-danger);}
+  .b-text{color:var(--ink); min-width:0;}
+  .bubble-danger .b-text{color:var(--bad); font-weight:700;}
+  .b-icon{position:relative; display:inline-block;}
+  .b-paper{margin-left:1px;}
+  .steam{position:absolute; top:-4px; width:2px; height:6px; background:var(--muted); border-radius:2px; opacity:.6;}
+  .steam.s1{left:2px; animation:steam-rise 1.6s ease-out infinite;}
+  .steam.s2{left:8px; animation:steam-rise 1.6s ease-out infinite .5s;}
+
+  .desk[data-status="working"] .char-group{animation:bob-fast .4s ease-in-out infinite;}
+  .desk[data-status="working"] .code-line{animation:code-scroll .6s ease-in-out infinite;}
+  .desk[data-status="question"] .char-group{animation:bob-slow 1.4s ease-in-out infinite;}
+  .desk[data-status="blocked"] .char-group{animation:tremble .3s ease-in-out infinite;}
+  .desk[data-status="review"] .arm-r{animation:wave-arm .8s ease-in-out infinite; transform-box:fill-box; transform-origin:top center;}
+  .anim-wave-emoji{display:inline-block; animation:wave-arm .8s ease-in-out infinite;}
+
+  @keyframes bob-fast{0%,100%{transform:translateY(0)} 50%{transform:translateY(-2.5px)}}
+  @keyframes bob-slow{0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)}}
+  @keyframes tremble{0%,100%{transform:translateX(0)} 50%{transform:translateX(1px)}}
+  @keyframes wave-arm{0%,100%{transform:rotate(0deg)} 50%{transform:rotate(-20deg)}}
+  @keyframes code-scroll{0%,100%{opacity:.55} 50%{opacity:1}}
+  @keyframes steam-rise{0%{transform:translateY(0); opacity:.6} 100%{transform:translateY(-9px); opacity:0}}

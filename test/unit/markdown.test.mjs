@@ -1,15 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import vm from 'node:vm';
-
-// Pull the viewer straight out of the page so the test exercises the shipped code.
-const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-const escapeLine = html.match(/^\s*const escapeHtml = .*$/m)[0];
-const viewer = html.slice(html.indexOf('// ---------- markdown viewer'), html.indexOf('// ---------- kanban'));
-const ctx = vm.createContext({});
-vm.runInContext(`${escapeLine}\n${viewer}\nglobalThis.md = renderMarkdown;`, ctx);
-const md = ctx.md;
+import { renderMarkdown as md } from '../../public/js/lib/markdown.js';
 
 test('table, code fence, nested and task lists', () => {
     const out = md([

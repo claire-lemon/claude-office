@@ -1,0 +1,25 @@
+/* board.css: 결재함 kanban columns and cards */
+  .kanban{background:var(--bg-panel); border:1px solid var(--line); border-radius:16px; padding:14px; min-width:0;}
+  .kan-columns{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:8px;}
+  @media (max-width:800px){ .kan-columns{grid-template-columns:repeat(2,minmax(0,1fr));} }
+  @media (max-width:520px){ .kan-columns{grid-template-columns:minmax(0,1fr);} }
+  .kan-col{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; min-height:120px; min-width:0;}
+  .kan-col h3{font-size:12px; color:var(--muted); text-transform:none;}
+  .kan-list{display:flex; flex-direction:column; gap:6px; min-height:24px; min-width:0;}
+  .kan-card{background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:6px 8px; cursor:pointer; min-width:0;}
+  .kan-card:hover{box-shadow:var(--shadow);}
+  .kan-card.selected{outline:2px solid var(--accent);}
+  .kan-top{display:flex; align-items:center; gap:6px; min-width:0;}
+  .kan-avatar svg{width:20px; height:28px; display:block; flex:none;}
+  .kan-title{font-size:12px; font-weight:700; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .kan-tag{font-size:10px; padding:1px 6px; border-radius:8px; background:var(--accent); color:#fff; flex:none;}
+  .kan-tag.tag-danger{background:var(--bad);}
+  .col-head{display:flex; align-items:center; justify-content:space-between; gap:6px;}
+  .col-btn{font-size:11px; padding:2px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--muted); cursor:pointer;}
+  .col-btn[hidden]{display:none;}
+  .kan-meta{font-size:11px; color:var(--muted); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .kan-diffstat{font-size:11px; margin-top:2px; white-space:normal; overflow-wrap:break-word;}
+  .kan-diffstat.hidden{display:none;}
+  .ds-add{color:var(--good); font-weight:700;}
+  .ds-del{color:var(--bad); font-weight:700;}
+  .tag-warn{display:inline-block; background:var(--warn); color:#fff; font-size:10px; padding:1px 6px; border-radius:8px; margin-left:4px;}
