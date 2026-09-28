@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import {
     buildSessions, diffFor, lastAssistantText, SUMMARY_DIR, CONFIRM_INSTRUCTION, nextTaskPrompt, newSessionLink,
@@ -72,62 +71,12 @@ const markConfirmed = id => saveDecision(id, { kind: 'confirm', at: Date.now() }
 
 // OFFICE_DRY=1 (tests): report what would happen without touching the clipboard or the Claude app.
 const DRY = !!process.env.OFFICE_DRY;
-const run = promisify(execFile);
-const UTF8_ENV = { env: { ...process.env, LANG: 'en_US.UTF-8' } };
 const openLink = link => (DRY ? null : execFile('open', [link], () => {}));
-// pbcopy drops non-ASCII text entirely when the locale is unset (e.g. launched from an app).
-const copyText = text =>
-    DRY
-        ? Promise.resolve()
-        : new Promise(resolve => {
-              const child = execFile('pbcopy', [], UTF8_ENV, () => resolve());
-              child.stdin.end(text);
-          });
-
-// Direct send into an existing chat. The app refuses ?q= prefill for existing chats, so this types it:
-// wait until Claude is frontmost AND its front window title shows this session's title, then Cmd+V, Return.
-// If that can't be confirmed (no Accessibility permission, another chat still on screen), nothing is typed;
-// the text stays on the clipboard for a manual Cmd+V, Enter.
-const AUTO_SEND_SCRIPT = `on run argv
-    set wanted to item 1 of argv
-    tell application "Claude" to activate
-    delay 0.6
-    tell application "System Events"
-        set seen to ""
-        repeat 30 times
-            if (name of first application process whose frontmost is true) is "Claude" then
-                try
-                    set seen to name of front window of process "Claude"
-                end try
-                if seen contains wanted then
-                    delay 0.3
-                    keystroke "v" using command down
-                    delay 0.15
-                    key code 36
-                    return "sent"
-                end if
-            end if
-            delay 0.1
-        end repeat
-    end tell
-    error "title-mismatch: " & seen number 9001
-end run`;
-
-const deliverToChat = async (session, text) => {
-    if (DRY) return { auto: false, reason: 'dry' };
-    const previous = await run('pbpaste', [], UTF8_ENV).then(r => r.stdout).catch(() => null);
-    await copyText(text);
-    if (!session.link?.startsWith('claude://')) return { auto: false, reason: 'no-link' };
-    await run('open', [session.link]).catch(() => {});
-    try {
-        await run('osascript', ['-e', AUTO_SEND_SCRIPT, session.title], { timeout: 8000 });
-        if (previous !== null) setTimeout(() => copyText(previous), 1500); // after the paste has landed
-        return { auto: true };
-    } catch (e) {
-        const msg = String(e.stderr || e.message || '');
-        const reason = /-1719|-1728|-25211|보조 접근|assistive|not allowed/i.test(msg) ? 'permission' : /title-mismatch/.test(msg) ? 'mismatch' : 'failed';
-        return { auto: false, reason, detail: msg.trim().split('\n').pop().slice(0, 200) };
-    }
+const copyText = text => {
+    if (DRY) return;
+    // pbcopy drops non-ASCII text entirely when the locale is unset (e.g. launched from an app).
+    const child = execFile('pbcopy', [], { env: { ...process.env, LANG: 'en_US.UTF-8' } }, () => {});
+    child.stdin.end(text);
 };
 
 const routes = {
@@ -138,12 +87,13 @@ const routes = {
     },
     // Confirm = hand the session its "commit -> PR -> recommend next" instruction.
     // Existing chats can't be prefilled by deep link, so it goes to the clipboard and the chat opens.
-    'POST /api/confirm': async (req, res, id) => {
+    'POST /api/confirm': (req, res, id) => {
         const s = findSession(id);
         if (!s) return send(res, 404, { error: 'unknown session' });
         markConfirmed(id);
-        const delivery = await deliverToChat(s, CONFIRM_INSTRUCTION);
-        return send(res, 200, { ok: true, copied: CONFIRM_INSTRUCTION, opened: s.link || null, ...delivery });
+        copyText(CONFIRM_INSTRUCTION);
+        if (s.link?.startsWith('claude://')) openLink(s.link);
+        return send(res, 200, { ok: true, copied: CONFIRM_INSTRUCTION, opened: s.link || null });
     },
     // Reply = hand a typed answer to an existing chat. The app refuses ?q= prefill for existing chats
     // (it blanks q/prompt on claude.ai links; only code/new reads it), so: clipboard + open chat, user ⌘V, Enter.
@@ -154,8 +104,9 @@ const routes = {
         const text = typeof body?.text === 'string' ? body.text.trim() : '';
         if (!text) return send(res, 400, { error: 'empty reply' });
         if (text.length > REPLY_LIMIT) return send(res, 413, { error: 'reply too long' });
-        const delivery = await deliverToChat(s, text);
-        return send(res, 200, { ok: true, copied: text, opened: s.link || null, ...delivery });
+        copyText(text);
+        if (s.link?.startsWith('claude://')) openLink(s.link);
+        return send(res, 200, { ok: true, copied: text, opened: s.link || null });
     },
     // OK = start the recommended next task in a NEW session, prompt prefilled (user presses Enter).
     'POST /api/next': (req, res, id, url) => {
