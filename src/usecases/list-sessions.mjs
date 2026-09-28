@@ -7,10 +7,24 @@ import { loadStates } from '../sources/hook-states.mjs';
 import * as decisionsStore from '../sources/decisions.mjs';
 import * as summaries from '../sources/summaries.mjs';
 import { transcriptPathFor, lastAssistantText } from '../sources/transcripts.mjs';
-import { gitInfo, mergeBase, shortstat } from '../sources/git.mjs';
+import { gitInfo, mergeBase, shortstat, untrackedFiles, addedFilePatch } from '../sources/git.mjs';
+import { countLines, isBinaryPatch } from '../domain/diff.mjs';
 import { activeDecision, deriveStatus, seatAtDesks } from '../domain/status.mjs';
 import { parseReport } from '../domain/report.mjs';
 import { toSessionView } from '../domain/session-view.mjs';
+
+// New (untracked) files added to a tracked shortstat's counts, so a report that only created
+// files (git diff ignores those) doesn't read as "변경 없음" on the card.
+const addUntracked = (wt, stat) => {
+    const files = untrackedFiles(wt);
+    if (!files.length) return stat;
+    const added = files.reduce((sum, f) => {
+        const patch = addedFilePatch(wt, f);
+        if (!patch || isBinaryPatch(patch)) return sum;
+        return sum + countLines(patch).add;
+    }, 0);
+    return { files: stat.files + files.length, add: stat.add + added, del: stat.del };
+};
 
 // Diff shortstat for cards; cached per (session, event) so polling doesn't re-run git.
 const statCache = new Map();
@@ -21,9 +35,10 @@ const statFor = (id, at, app) => {
     if (!statCache.has(key)) {
         try {
             const base = mergeBase(wt, app.sourceBranch || 'HEAD');
-            const out = shortstat(wt, base);
+            const out = base ? shortstat(wt, base) : '';
             const n = re => Number((out.match(re) || [])[1] || 0);
-            statCache.set(key, { files: n(/(\d+) files? changed/), add: n(/(\d+) insertions?/), del: n(/(\d+) deletions?/) });
+            const stat = { files: n(/(\d+) files? changed/), add: n(/(\d+) insertions?/), del: n(/(\d+) deletions?/) };
+            statCache.set(key, addUntracked(wt, stat));
         } catch {
             statCache.set(key, null);
         }

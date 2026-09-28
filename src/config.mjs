@@ -21,4 +21,6 @@ export const DRY = !!process.env.OFFICE_DRY;
 export const DAY = 24 * 60 * 60 * 1000;
 export const MAX_DESKS = 10;
 export const TAIL_BYTES = 256 * 1024;
-export const DIFF_LIMIT = 500 * 1024;
+export const DIFF_FILE_LIMIT = 200 * 1024; // per-file patch bytes before tooLarge
+export const DIFF_TOTAL_LIMIT = 1024 * 1024; // total patch bytes before truncated
+export const DIFF_MAX_UNTRACKED = 30; // max untracked files rendered as added patches

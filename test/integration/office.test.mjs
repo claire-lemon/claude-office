@@ -47,7 +47,7 @@ test('buildSessions + diff on simulated office', () => {
     assert.equal(byId.local_0.link, 'claude://claude.ai/epitaxy/local_0');
     const d = getChanges(byId.local_0);
     assert.equal(d.tracked, true);
-    assert.deepEqual(d.files.map(f => f.path), ['views.ts']);
+    assert.deepEqual(d.files.map(f => f.path), ['views.ts', 'new-file.md']); // tracked diff + new-file.md now shown as added
     assert.deepEqual(d.untracked, ['new-file.md']);
     assert.equal(getChanges(byId.local_1).tracked, false);
     assert.deepEqual(gitInfo(path.join(HOME, 'repo')), { project: 'repo', branch: 'feat/x' });
@@ -55,7 +55,7 @@ test('buildSessions + diff on simulated office', () => {
     assert.equal(byId.local_0.diffStat, null);
     hook({ session_id: 'cli-0', hook_event_name: 'Stop' });
     const stopped = listSessions().find(s => s.id === 'local_0');
-    assert.deepEqual(stopped.diffStat, { files: 1, add: 1, del: 0 });
+    assert.deepEqual(stopped.diffStat, { files: 2, add: 2, del: 0 }); // includes the untracked new-file.md
 });
 
 test('install is idempotent, keeps foreign hooks, uninstall removes only ours', () => {
