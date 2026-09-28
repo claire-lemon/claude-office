@@ -82,7 +82,11 @@
 <script type="module" src="js/main.js"></script>
 <dialog id="archive-dialog" class="archive-dialog" aria-labelledby="archive-title">
   <div class="archive-head"><h2 id="archive-title">보관함</h2><button type="button" class="panel-close" id="archive-close" aria-label="닫기">✕</button></div>
-  <div id="archive-body"></div>
+  <div id="archive-body">
+    <div id="archive-sessions"></div>
+    <h3 class="archive-sub">지난 할 일</h3>
+    <div id="archive-todos"></div><!-- views/archive.js, docs/specs/2026-09-29-todo-history-design.md §3.6 -->
+  </div>
 </dialog>
 </body>
 </html>

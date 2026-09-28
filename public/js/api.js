@@ -20,6 +20,8 @@ export const postEdit = (id, patch) => fetch(`/api/edit/${encodeURIComponent(id)
 // Today's todos (blackboard, docs/specs/2026-09-28-todo-blackboard-design.md §8).
 const jsonInit = (method, body) => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 export const getTodos = () => fetch('/api/todos', { cache: 'no-store' });
+// 보관함 "지난 할 일" (docs/specs/2026-09-29-todo-history-design.md §3.6).
+export const getTodoHistory = () => fetch('/api/todo-history', { cache: 'no-store' });
 export const postTodo = body => fetch('/api/todos', jsonInit('POST', body));
 export const patchTodo = (id, body) => fetch(`/api/todos/${encodeURIComponent(id)}`, jsonInit('POST', body));
 export const deleteTodo = id => fetch(`/api/todos/${encodeURIComponent(id)}`, { method: 'DELETE' });

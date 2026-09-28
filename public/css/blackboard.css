@@ -52,7 +52,16 @@
   .blackboard .bb-ghost{border-color:transparent; color:var(--chalk-dim);}
   .bb-start{margin-left:auto;}
   .bb-item.done .bb-name{text-decoration:line-through; text-decoration-thickness:1.5px; color:var(--chalk-dim);}
-  .bb-item.done .bb-meta{opacity:.65;}
+  .bb-item.done .bb-meta,.bb-item.done .bb-hist{opacity:.65;}
+  /* +n: earlier linked sessions, listed oldest first under the item (design §3.5) */
+  .blackboard .bb-more{padding:0 5px; border:1px dashed var(--chalk-dim); border-radius:8px; font-size:10px; line-height:14px; color:var(--chalk-dim); cursor:pointer;}
+  .blackboard .bb-more:hover,.bb-more[aria-expanded="true"]{color:var(--chalk); border-color:var(--chalk);}
+  .bb-hist{list-style:none; margin:4px 0 0 20px; padding:0 0 0 8px; border-left:1px dashed var(--chalk-line); display:grid; gap:3px; font-size:11px; color:var(--chalk-dim);}
+  .bb-hist li{display:flex; align-items:center; gap:6px; min-width:0;}
+  .bb-hist .bb-worker{flex:1; min-width:0; gap:5px; text-align:left;}
+  .bb-hist .bb-worker > svg,.bb-hist .bb-chip{flex:none;}
+  .bb-hist-title{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .bb-hist-at{flex:none; font-variant-numeric:tabular-nums;}
 
   /* inputs written in chalk: the add form, the memo textarea, the title's inline edit */
   .bb-in,.bb-detail,.blackboard .inline-edit{width:100%; font:inherit; font-size:12px; color:var(--chalk); background:rgba(0,0,0,.22); border:1px solid var(--chalk-line); border-radius:4px; padding:3px 6px; outline:none;}

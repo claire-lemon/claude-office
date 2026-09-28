@@ -25,8 +25,8 @@ const START_ERRORS = { 'repo folder not found': '레포 폴더를 찾지 못했�
 // data: store.todos ({ list, deleted, folders }); optimistic updates write into it, the poll replaces it.
 const view = { el: null, data: { list: [], deleted: [], folders: [] }, sessionsById: new Map(), onChange: () => {} };
 // adding: add form open (renders never touch it). memo: ids with the detail textarea open.
-// starting: ids waiting on POST /api/start.
-const ui = { adding: false, memo: new Set(), starting: new Set() };
+// starting: ids waiting on POST /api/start. history: ids with the earlier-sessions list open (design §3.5).
+const ui = { adding: false, memo: new Set(), starting: new Set(), history: new Set() };
 const itemEls = new Map(); // todo id -> { el, html }: html is the last markup, unchanged = DOM left alone
 const refs = { trashHtml: '' };
 
@@ -48,13 +48,22 @@ const SHELL = `
 const chipState = s => (OFF_BOARD_LABEL[s.status] ? s.status : s.column || 'stale');
 const chipLabel = s => OFF_BOARD_LABEL[s.status] ?? COLUMN_LABEL[s.column] ?? OFF_BOARD_LABEL.stale;
 
-// Latest linked session: animal face + status chip. Only a session on the board has a panel to open.
-const workerHtml = s => {
-  const inner = `<svg viewBox="0 0 24 34" aria-hidden="true"><use href="#animal-${safeAnimal(s.animal)}"></use></svg><span class="bb-chip" data-state="${escapeHtml(chipState(s))}">${escapeHtml(chipLabel(s))}</span>`;
+// Linked session: animal face (+ label html) + status chip. Only a session on the board has a panel to open.
+const workerHtml = (s, label = '') => {
+  const inner = `<svg viewBox="0 0 24 34" aria-hidden="true"><use href="#animal-${safeAnimal(s.animal)}"></use></svg>${label}<span class="bb-chip" data-state="${escapeHtml(chipState(s))}">${escapeHtml(chipLabel(s))}</span>`;
   return view.sessionsById.has(s.id)
     ? `<button type="button" class="bb-worker" data-act="worker" data-session="${escapeHtml(s.id)}" title="${escapeHtml(s.title)} · 패널 열기">${inner}</button>`
     : `<span class="bb-worker" title="${escapeHtml(s.title)}">${inner}</span>`;
 };
+
+const pad2 = n => String(n).padStart(2, '0');
+const stamp = ms => {
+  if (!ms) return '';
+  const d = new Date(ms);
+  return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+// One earlier session: face · title · chip (one button while on the board) · MM-DD HH:MM.
+const histHtml = s => `<li>${workerHtml(s, `<span class="bb-hist-title">${escapeHtml(s.title)}</span>`)}<span class="bb-hist-at">${stamp(s.decidedAt ?? s.lastAt)}</span></li>`;
 
 const startLabel = t => (ui.starting.has(t.id) ? '여는 중…' : t.status === 'started' ? '다시 시작' : '시작');
 
@@ -64,6 +73,9 @@ const itemHtml = t => {
   const done = t.status === 'done';
   const start = done ? '' : `<button type="button" class="bb-btn bb-start" data-act="start"${ui.starting.has(t.id) ? ' disabled' : ''}>${startLabel(t)}</button>`;
   const memoOpen = ui.memo.has(t.id);
+  const earlier = (t.sessions || []).slice(1).reverse(); // server sends recent first; history reads oldest first
+  const histOpen = earlier.length > 0 && ui.history.has(t.id);
+  const more = earlier.length ? `<button type="button" class="bb-more" data-act="history" aria-expanded="${histOpen}" aria-label="이전 세션 ${earlier.length}개" title="이전 세션 ${earlier.length}개">+${earlier.length}</button>` : '';
   return `<div class="bb-row">
       <input type="checkbox" class="bb-check" data-act="toggle"${done ? ' checked' : ''}>
       ${t.source === 'scrum' ? '<span class="bb-scrum" title="회의실에서 추가">🏫</span>' : ''}<span class="bb-name" data-act="title" role="button" tabindex="0" title="클릭해서 제목 바꾸기"></span>
@@ -72,9 +84,10 @@ const itemHtml = t => {
     </div>
     <div class="bb-meta">
       <span class="bb-proj" title="${escapeHtml(t.folder)}">📁 ${escapeHtml(t.project || '-')}</span>
-      ${t.latest ? workerHtml(t.latest) : ''}
+      ${t.latest ? workerHtml(t.latest) : ''}${more}
       ${start}
     </div>
+    ${histOpen ? `<ol class="bb-hist" aria-label="이전 세션">${earlier.map(histHtml).join('')}</ol>` : ''}
     ${memoOpen ? '<textarea class="bb-detail" maxlength="2000" rows="3" placeholder="세부 메모 · 새 세션 프롬프트에 들어가요" aria-label="세부 메모"></textarea>' : ''}`;
 };
 
@@ -86,10 +99,11 @@ const paintItem = (entry, t) => {
   el.dataset.status = t.status;
   const html = itemHtml(t);
   if (html !== entry.html) {
-    const act = el.contains(document.activeElement) ? document.activeElement.dataset.act : null;
+    const { act, session } = el.contains(document.activeElement) ? document.activeElement.dataset : {};
     el.innerHTML = html;
     entry.html = html;
-    if (act) el.querySelector(`[data-act="${act}"]`)?.focus(); // keyboard focus survives a re-render
+    // keyboard focus survives a re-render (a worker chip: the same session's, latest or history)
+    if (act) el.querySelector(`[data-act="${act}"]${session ? `[data-session="${CSS.escape(session)}"]` : ''}`)?.focus();
   }
   el.querySelector('.bb-name').textContent = t.title;
   el.querySelector('.bb-check').setAttribute('aria-label', `완료: ${t.title}`);
@@ -182,6 +196,12 @@ const toggleMemo = id => {
   else ui.memo.add(id);
   draw();
   if (ui.memo.has(id)) itemEls.get(id)?.el.querySelector('.bb-detail')?.focus();
+};
+
+const toggleHistory = id => {
+  if (ui.history.has(id)) ui.history.delete(id);
+  else ui.history.add(id);
+  draw();
 };
 
 const saveDetail = (id, area) => {
@@ -320,6 +340,7 @@ const ACTIONS = {
   delete: remove,
   restore: id => restore(id),
   'edit-detail': toggleMemo,
+  history: toggleHistory,
   title: editTitle,
   worker: (id, btn) => controls.selectSession(btn.dataset.session),
   add: openForm,
