@@ -2,7 +2,7 @@
 // keep the 오늘 일지 auto block fresh, open a facilitator session, and close a meeting into the note.
 import fs from 'node:fs';
 import path from 'node:path';
-import { OFFICE_DIR, CLI_PATH } from '../config.mjs';
+import { OFFICE_DIR, CLI_PATH, GUIDE_FILE } from '../config.mjs';
 import * as decisionsStore from '../sources/decisions.mjs';
 import * as overridesStore from '../sources/overrides.mjs';
 import * as todosStore from '../sources/todos.mjs';
@@ -97,7 +97,7 @@ export const startMeeting = (now = Date.now()) => {
     fs.mkdirSync(OFFICE_DIR, { recursive: true });
     const note = refreshNote(now);
     const id = meetingId(localDate(now), (facilitators(now)[0]?.n ?? 0) + 1);
-    const opened = newSessionLink(OFFICE_DIR, meetingPrompt(id, note));
+    const opened = newSessionLink(OFFICE_DIR, meetingPrompt(id, note, GUIDE_FILE));
     openUrl(opened);
     return { opened, note, id };
 };

@@ -16,8 +16,10 @@ test('meeting marker: id format, found in a transcript head, other dates kept, a
 test('meetingPrompt: marker first line, note path, CLAUDE.md pointer, within the deep-link limit', () => {
     const id = meetingId('2026-09-29', 1);
     const note = '/Users/me/.claude/office/daily/2026-09-29.md';
-    const prompt = meetingPrompt(id, note);
-    assert.equal(prompt, `${meetingMarker(id)}\n오늘 일지: ${note}\n이 폴더의 CLAUDE.md 지침대로 회의를 시작해줘.`);
+    const guide = '/Users/me/.claude/office/CLAUDE.md';
+    const prompt = meetingPrompt(id, note, guide);
+    // guide path first: the app may open a scratch workspace, so CLAUDE.md is read by path, not by cwd
+    assert.equal(prompt, `${meetingMarker(id)}\n지침: ${guide}\n오늘 일지: ${note}\n지침 파일을 먼저 읽고 그대로 회의를 시작해줘. 지침과 일지 외의 파일은 읽지 마.`);
     assert.ok(prompt.length <= NEXT_PROMPT_LIMIT);
     assert.equal(meetingIdIn(prompt), id);
 });
@@ -25,8 +27,8 @@ test('meetingPrompt: marker first line, note path, CLAUDE.md pointer, within the
 test('facilitatorGuide: version header first, all five CLI commands with the path, the hard rules', () => {
     const cliPath = '/Users/me/claude-office/bin/office.mjs';
     const guide = facilitatorGuide({ cliPath });
-    assert.equal(GUIDE_VERSION, 1);
-    assert.equal(GUIDE_HEADER, '<!-- claude-office guide v1 -->');
+    assert.equal(GUIDE_VERSION, 2);
+    assert.equal(GUIDE_HEADER, `<!-- claude-office guide v${GUIDE_VERSION} -->`);
     assert.equal(guide.split('\n')[0], GUIDE_HEADER);
     ['todo list', 'todo add', 'todo update', 'todo delete', 'folders'].forEach(cmd => assert.ok(guide.includes(`node ${cliPath} ${cmd}`), cmd));
     ['금지', '레포', '볼트', 'git', '--source scrum', '최근 프로젝트 폴더', '중복 추가 금지', 'exit 1', '"error"'].forEach(w => assert.ok(guide.includes(w), w));

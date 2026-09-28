@@ -9,12 +9,14 @@ export const meetingMarker = id => `🏫 데일리 스크럼 #meeting-${id}`;
 export const meetingIdIn = text => (typeof text === 'string' && text.match(MEETING_MARK)?.[1]) || null;
 
 // Deep links cap the prompt at 2000 chars, so the instructions live in the folder's CLAUDE.md instead.
-export const meetingPrompt = (id, notePath) =>
-    [meetingMarker(id), `오늘 일지: ${notePath}`, '이 폴더의 CLAUDE.md 지침대로 회의를 시작해줘.'].join('\n');
+// The app may open the session in a scratch workspace instead of OFFICE_DIR (seen with a non-git
+// folder), so the guide is named by absolute path and read first rather than relied on as CLAUDE.md.
+export const meetingPrompt = (id, notePath, guidePath) =>
+    [meetingMarker(id), `지침: ${guidePath}`, `오늘 일지: ${notePath}`, '지침 파일을 먼저 읽고 그대로 회의를 시작해줘. 지침과 일지 외의 파일은 읽지 마.'].join('\n');
 
 // First line of CLAUDE.md. The server rewrites the guide only when this line differs, so hand edits
 // survive until the version is bumped.
-export const GUIDE_VERSION = 1;
+export const GUIDE_VERSION = 2;
 export const GUIDE_HEADER = `<!-- claude-office guide v${GUIDE_VERSION} -->`;
 
 export const facilitatorGuide = ({ cliPath }) => {
@@ -27,12 +29,13 @@ export const facilitatorGuide = ({ cliPath }) => {
 ## 역할
 1. 데일리 스크럼 진행자
    1. 어제 한 일 정리, 오늘 할 일을 사용자와 정해 칠판에 기록
-2. 읽는 것은 두 가지뿐
-   1. 프롬프트의 \`오늘 일지:\` 경로 파일 하나
-   2. 사용자가 채팅에 쓴 말
+2. 읽는 것은 세 가지뿐
+   1. 이 지침 파일 (프롬프트의 \`지침:\` 경로)
+   2. 프롬프트의 \`오늘 일지:\` 경로 파일 하나
+   3. 사용자가 채팅에 쓴 말
 
 ## 금지
-1. 레포·볼트·다른 파일 조사 금지 (일지 외 파일 읽기, ls·find·grep 금지)
+1. 레포·볼트·다른 파일 조사 금지 (지침·일지 외 파일 읽기, ls·find·grep 금지)
 2. 코드·파일 수정 금지 (일지도 고치지 않음, 칠판은 아래 CLI로만 기록)
 3. git 명령 금지
 4. 웹 검색·웹 조회 금지

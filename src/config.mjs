@@ -26,7 +26,9 @@ export const DRY = !!process.env.OFFICE_DRY;
 export const DAY = 24 * 60 * 60 * 1000;
 export const MAX_DESKS = 20;
 export const TAIL_BYTES = 256 * 1024;
-export const HEAD_BYTES = 16 * 1024; // transcript head scanned for a #todo- marker
+// Transcript head scanned for #todo- / #meeting- markers. A real transcript opens with ~30KB of app
+// preamble (queue entries, hook attachments) before the first prompt, so 16KB missed it.
+export const HEAD_BYTES = 256 * 1024;
 export const TODO_FOLDERS_LIMIT = 20; // recent project folders offered by the todo form
 export const DIFF_FILE_LIMIT = 200 * 1024; // per-file patch bytes before tooLarge
 export const DIFF_TOTAL_LIMIT = 1024 * 1024; // total patch bytes before truncated

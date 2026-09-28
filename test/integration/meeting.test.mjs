@@ -89,7 +89,7 @@ test('start (dry run): note with the auto block, facilitator deep link with meet
     assert.deepEqual([res.body.ok, res.body.note, res.body.id], [true, NOTE, `${TODAY}-1`]);
     const q = qOf(res.body.opened);
     assert.equal(q.get('folder'), OFFICE_DIR);
-    assert.equal(q.get('q'), meetingPrompt(`${TODAY}-1`, NOTE));
+    assert.equal(q.get('q'), meetingPrompt(`${TODAY}-1`, NOTE, GUIDE));
     assert.ok(q.get('q').includes(`#meeting-${TODAY}-1`));
 
     const text = note();
