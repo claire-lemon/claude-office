@@ -12,3 +12,8 @@ export const postUndo = id => fetch(`/api/undo/${encodeURIComponent(id)}`, { met
 export const postOpen = id => fetch(`/api/open/${encodeURIComponent(id)}`, { method: 'POST' });
 export const postSummary = id => fetch(`/api/summary/${encodeURIComponent(id)}`, { method: 'POST' });
 export const getArchived = () => fetch('/api/archived');
+export const postMove = (id, to) => fetch(`/api/move/${encodeURIComponent(id)}?to=${encodeURIComponent(to)}`, { method: 'POST' });
+// JSON content-type is required by the server (blocks preflight-free cross-site posts).
+export const postEdit = (id, patch) => fetch(`/api/edit/${encodeURIComponent(id)}`, {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch),
+});

@@ -14,7 +14,11 @@
   .panel-head{padding:16px 40px 8px 16px;}
   .panel-title{display:flex; align-items:center; gap:8px; min-width:0;}
   .panel-animal svg{width:28px; height:36px; display:block; flex:none;}
-  #panel-name{font-size:15px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #panel-name{font-size:15px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; border-radius:6px; padding:1px 4px; margin-left:-4px;}
+  #panel-name:hover{background:var(--card);}
+  #panel-name:focus-visible{background:var(--card); outline:2px solid var(--accent); outline-offset:1px;}
+  #panel-name[data-editing]{flex:1; padding:0; margin-left:0; overflow:visible; outline:none; background:none;}
+  .inline-edit{width:100%; font:inherit; color:inherit; background:var(--card); border:1px solid var(--accent); border-radius:6px; padding:1px 4px; outline:none;}
   .panel-sub{font-size:12px; color:var(--muted); margin-top:4px;}
   .panel-loc{margin-top:6px; font-size:12px; display:grid; gap:2px;}
   .panel-loc > div{display:flex; gap:6px; min-width:0;}
@@ -59,12 +63,11 @@
   .patch .hunk{color:var(--accent); display:inline-block; width:100%;}
   .patch .meta{color:var(--muted); display:inline-block; width:100%;}
   .untracked ul{margin:4px 0 0; padding-left:18px; font-size:12px;}
-  .panel-actions{display:flex; flex-wrap:wrap; gap:6px; padding:10px 16px 16px; border-top:1px solid var(--line);}
+  .panel-actions{display:flex; flex-direction:column; gap:8px; padding:10px 16px 16px; border-top:1px solid var(--line);}
   .act-btn.act-primary{background:var(--accent); color:#fff; border-color:var(--accent);}
   .toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:30; background:var(--ink); color:var(--bg-panel); padding:10px 16px; border-radius:12px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.18); max-width:90vw;}
   .act-btn{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px;}
   .act-btn:disabled{opacity:.6; cursor:default;}
-  .act-btn[data-action="confirm"]{background:var(--accent); color:#fff; border-color:var(--accent);}
   .stamp-layer{position:fixed; inset:0; z-index:5; display:flex; align-items:center; justify-content:center; pointer-events:none;}
   .stamp-fx{font-size:48px; font-weight:900; color:var(--bad); border:6px solid var(--bad); border-radius:12px; padding:4px 16px;
     transform:rotate(-8deg); animation:stamp-bang .9s ease-out forwards;}
@@ -77,23 +80,20 @@
     font-size:11px; line-height:1; padding:4px 7px; border-radius:6px; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .15s ease;}
   .panel-resize-handle:hover::after, .panel-resize-handle:focus-visible::after{opacity:1; transition-delay:.3s;}
 
-  /* ---- footer: split primary + overflow menu (panel/footer.js, panel/actions.js) ---- */
+  /* ---- footer: row 1 primary(+split ▾) + secondary, row 2 small extras (panel/footer.js, panel/actions.js) ---- */
+  .act-row{display:flex; flex-wrap:wrap; align-items:center; gap:6px;}
+  .act-row-extra{gap:4px;}
+  .act-btn.act-sm{padding:4px 8px; font-size:11px; border-radius:6px;}
+  .act-btn.act-danger{margin-left:auto; color:var(--bad);}
   .act-split{position:relative; display:inline-flex;}
   .act-split .act-primary{border-top-right-radius:0; border-bottom-right-radius:0;}
-  .act-split-toggle{border-top-left-radius:0; border-bottom-left-radius:0; border-left:1px solid rgba(255,255,255,.35);}
-  .act-menu-toggle{background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:8px; padding:7px 8px; font-size:11px; line-height:1;}
-  .act-overflow .act-menu-toggle{background:var(--card); color:var(--ink); border-color:var(--line); border-radius:8px; padding:7px 10px;}
-  .act-overflow{position:relative; display:inline-flex; margin-left:auto;}
-  .act-menu{position:absolute; bottom:calc(100% + 6px); min-width:180px; background:var(--bg-panel); border:1px solid var(--line); border-radius:10px;
-    box-shadow:var(--shadow); padding:4px; display:flex; flex-direction:column; gap:1px; z-index:25;}
-  .act-split .act-menu{left:0;}
-  .act-menu-right{right:0;}
+  .act-split-toggle{background:var(--accent); color:#fff; border:1px solid var(--accent); border-left-color:rgba(255,255,255,.35);
+    border-radius:0 8px 8px 0; padding:7px 8px; font-size:11px; line-height:1;}
+  .act-menu{position:absolute; left:0; bottom:calc(100% + 6px); min-width:180px; max-width:calc(min(var(--panel-w, 380px), 92vw) - 32px); background:var(--bg-panel);
+    border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:4px; display:flex; flex-direction:column; gap:1px; z-index:25;}
   .act-menu.hidden{display:none;}
   .act-menu .act-menu-item{background:none; border:none; border-radius:6px; text-align:left; padding:7px 8px; font-size:12px; width:100%;}
   .act-menu .act-menu-item:hover, .act-menu .act-menu-item:focus-visible{background:var(--card); outline:none;}
-  .act-menu .act-menu-item:disabled{opacity:.6; cursor:default;}
-  .act-menu-item.act-menu-danger{color:var(--bad);}
-  .act-menu-sep{border:none; border-top:1px solid var(--line); margin:3px 2px;}
 
   /* ---- report tab: 다음 작업 항목별 ▶ 진행 (panel/report-tab.js) ---- */
   .task-list{list-style:decimal;}
