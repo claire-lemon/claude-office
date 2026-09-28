@@ -18,16 +18,18 @@ const timed = fn => {
 
 execFileSync('node', [path.join(ROOT, 'scripts/simulate.mjs'), '--once'], { env });
 
-const hookMs = Array.from({ length: 100 }, (_, i) =>
+// Interleave hook and bare-node runs so background load hits both samples equally.
+const pairs = Array.from({ length: 100 }, (_, i) => [
     timed(() =>
         spawnSync('node', [path.join(ROOT, 'hooks/report.mjs')], {
             env,
             input: JSON.stringify({ session_id: `m${i % 10}`, hook_event_name: 'UserPromptSubmit' }),
         }),
     ),
-);
-
-const bareMs = Array.from({ length: 100 }, () => timed(() => spawnSync('node', ['-e', ''])));
+    timed(() => spawnSync('node', ['-e', ''])),
+]);
+const hookMs = pairs.map(p => p[0]);
+const bareMs = pairs.map(p => p[1]);
 const hookOverhead = p95(hookMs) - p95(bareMs);
 
 const server = spawn('node', [path.join(ROOT, 'server.mjs')], { env });
