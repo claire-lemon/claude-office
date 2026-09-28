@@ -7,6 +7,10 @@
 
 ![Claude Office — 픽셀 오피스와 결재함 (데모 데이터)](docs/images/office-light.png)
 
+| 상세 패널 · 보고서 | 상세 패널 · 변경사항 |
+|---|---|
+| ![보고서 탭: 결재 보고와 다음 작업](docs/images/panel-report.png) | ![변경사항 탭: 워크트리 diff](docs/images/panel-diff.png) |
+
 - 의존성 0개 (Node 22 표준 라이브러리 + `git`)
 - `127.0.0.1:7777` 전용
 
@@ -68,6 +72,8 @@ node scripts/demo.mjs public 7770
    node server.mjs
    ```
 4. 앱에서 새 세션에 작업 지시 → 사원이 타이핑 → 끝나면 "보고드려요" → 카드 클릭 → 보고서/변경사항 확인 → 채팅방 열기 또는 컨펌.
+
+특정 세션 패널을 바로 여는 주소: `http://127.0.0.1:7777/?open=<세션 id>` (변경사항 탭은 `&tab=diff`).
 
 hooks는 설치 **이후** 시작된 턴부터 잡힌다. 설치 전 세션은 24시간 이내 활동분만 회색(상태 미상)으로 보인다.
 

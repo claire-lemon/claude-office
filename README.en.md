@@ -7,6 +7,10 @@ Design notes (Korean): [`docs/specs/2026-09-25-claude-office-design.md`](docs/sp
 
 ![Claude Office — pixel office and approval board (demo data)](docs/images/office-light.png)
 
+| Detail panel · report | Detail panel · changes |
+|---|---|
+| ![Report tab: approval report and next tasks](docs/images/panel-report.png) | ![Changes tab: worktree diff](docs/images/panel-diff.png) |
+
 - Zero dependencies (Node 22 standard library + `git`)
 - Binds to `127.0.0.1:7777` only
 - macOS only (uses the Claude desktop app's local files, `open`, and `pbcopy`)
@@ -70,6 +74,8 @@ Ten fake sessions change state every 8 seconds. Open `http://127.0.0.1:7770`.
    node server.mjs
    ```
 4. Give a new session a task in the app. Its employee starts typing. When it finishes, it raises a hand ("보고드려요", "reporting in"). Click the card to read the report and diff, then open the chat or confirm.
+
+To open a session's panel directly: `http://127.0.0.1:7777/?open=<session id>` (add `&tab=diff` for the changes tab).
 
 Hooks only see turns that start **after** installation. Older sessions active in the last 24 hours show up grey (state unknown).
 
