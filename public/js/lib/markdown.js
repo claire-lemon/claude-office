@@ -8,10 +8,13 @@ const fmtInline = t => t
   .replace(/~~(.+?)~~/g, '<del>$1</del>')
   .replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\w)/g, '$1<em>$2</em>')
   .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+// Wiki-link markers left by wikiLabel (below) -> the label, with its path as a hover title.
+const WIKI_RE = /\uE000([^\uE001]*)\uE001([^\uE002]*)\uE002/g;
 export const inlineMd = s => escapeHtml(s)
   .split(/(`[^`]+`)/)
   .map(part => /^`[^`]+`$/.test(part) ? `<code>${part.slice(1, -1)}</code>` : fmtInline(part))
-  .join('');
+  .join('')
+  .replace(WIKI_RE, '<span class="md-wiki" title="$1">$2</span>');
 
 const LIST_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
 const isTableSep = l => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(l);
@@ -135,9 +138,13 @@ export const splitFrontmatter = text => {
   return { meta, body: lines.slice(end + 1).join('\n') };
 };
 
-// Obsidian-style [[path|label]] shows its label, [[path]] its path (embeds ![[...]] too). A table
-// cell's escaped [[path\|label]] works as well: the \| is consumed before the table splits cells.
-const wikiLabel = s => s.replace(/!?\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2').replace(/!?\[\[([^\]]*)\]\]/g, '$1');
+// Obsidian-style [[path|label]] shows its label, [[path]] its path (embeds ![[...]] too), and hovering
+// shows the path. A table cell's escaped [[path\|label]] works as well: the \| is consumed before the
+// table splits cells. This runs on raw text, before inlineMd escapes it, so it leaves private-use
+// markers (path, label) that inlineMd turns into the span once the path is escaped with the rest.
+const wikiLabel = s => s
+  .replace(/!?\[\[([^\]|]*)\|([^\]]*)\]\]/g, (_, path, label) => `\uE000${path.replace(/\\$/, '')}\uE001${label}\uE002`)
+  .replace(/!?\[\[([^\]]*)\]\]/g, '\uE000$1\uE001$1\uE002');
 // Same over a markdown body, leaving fenced code blocks and `inline code` as written.
 const bodyWikiLabels = body => body.split('\n').reduce((acc, l) => {
   const fence = /^\s*(```|~~~)/.test(l);

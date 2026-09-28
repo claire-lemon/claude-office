@@ -80,7 +80,7 @@ test('frontmatter: note-header YAML becomes a key/value table, body renders belo
     const out = renderDocument(doc);
     assert.match(out, /^<div class="md-table md-frontmatter"><table><tbody><tr><th>type<\/th><td>query-output<\/td><\/tr>/);
     assert.match(out, /<th>question<\/th><td>A &lt;b&gt;long&lt;\/b&gt; question\?<\/td>/); // escaped, never HTML
-    assert.match(out, /<th>sources<\/th><td><ul><li>Plan v3 — the template<\/li><li>notes\/raw<\/li><\/ul><\/td>/); // wiki links -> labels
+    assert.match(out, /<th>sources<\/th><td><ul><li><span class="md-wiki" title="notes\/plan">Plan v3<\/span> — the template<\/li><li><span class="md-wiki" title="notes\/raw">notes\/raw<\/span><\/li><\/ul><\/td>/); // wiki links -> labels, path on hover
     assert.match(out, /<th>pr<\/th><td><span class="md-fm-empty">-<\/span><\/td>/);
     assert.match(out, /<\/table><\/div><h3>Title<\/h3>$/);
 });
@@ -95,7 +95,7 @@ test('frontmatter: a leading --- rule or an unclosed block is left to the markdo
     assert.equal(splitFrontmatter('---\n---\nbody').meta, null);
 });
 
-test('file preview body: wiki links show their label, code keeps them literal, report tab untouched', async () => {
+test('file preview body: wiki links show their label (path on hover), code keeps them literal, report tab untouched', async () => {
     const { renderDocument } = await import('../../public/js/lib/markdown.js');
     const body = [
         'See [[notes/plan|Plan v3]] and [[notes/raw]] ![[img.png]].',
@@ -110,8 +110,10 @@ test('file preview body: wiki links show their label, code keeps them literal, r
         '```',
     ].join('\n');
     const out = renderDocument(body);
-    assert.match(out, /<p>See Plan v3 and notes\/raw img\.png\.<\/p>/);
-    assert.match(out, /<td>목차 분석<\/td><td>ok<\/td>/); // escaped \| inside a table cell
+    const wiki = (path, label) => `<span class="md-wiki" title="${path}">${label}</span>`;
+    assert.ok(out.includes(`<p>See ${wiki('notes/plan', 'Plan v3')} and ${wiki('notes/raw', 'notes/raw')} ${wiki('img.png', 'img.png')}.</p>`));
+    assert.ok(out.includes(`<td>${wiki('notes/a', '목차 분석')}</td><td>ok</td>`)); // escaped \| inside a table cell, no trailing \ in the path
+    assert.ok(renderDocument('[[a "b" <c>|**x**]]').includes('<span class="md-wiki" title="a &quot;b&quot; &lt;c&gt;"><strong>x</strong></span>')); // path escaped, label formatted
     assert.match(out, /<code>\[\[keep\|me\]\]<\/code>/);
     assert.match(out, /<pre class="md-code"><code>if \[\[ -f x \]\]; then echo; fi<\/code><\/pre>/);
     assert.match(md('See [[notes/plan|Plan v3]]'), /\[\[notes\/plan\|Plan v3\]\]/); // renderMarkdown (report tab) unchanged
