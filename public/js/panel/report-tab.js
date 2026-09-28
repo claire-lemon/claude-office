@@ -1,5 +1,5 @@
 import { $, escapeHtml } from '../lib/dom.js';
-import { renderMarkdown } from '../lib/markdown.js';
+import { renderMarkdown, inlineMd } from '../lib/markdown.js';
 
 const fullMessage = session => session.lastMessage
   ? `<details class="full-msg report-sec"><summary>전체 응답 보기</summary>${renderMarkdown(session.lastMessage)}</details>`
@@ -15,7 +15,7 @@ const nextTasksHtml = session => {
   const items = tasks.map((t, i) => `
     <li class="task-item">
       <div class="task-item-row">
-        <span class="task-item-text">${escapeHtml(t.title)}</span>
+        <span class="task-item-text">${inlineMd(t.title)}</span>
         <button type="button" class="act-btn task-next-btn" data-action="next:${i}">▶ 진행</button>
       </div>
       ${t.detail ? `<div class="task-item-detail">${renderMarkdown(t.detail)}</div>` : ''}
