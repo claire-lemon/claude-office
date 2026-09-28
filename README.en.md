@@ -151,7 +151,7 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
 **🏫 회의실** in the header switches the screen to the meeting room: the todo blackboard on the left, the facilitator's seat on the right. It is where yesterday gets summarized and today's todos get brainstormed.
 
 1. **회의 시작** (start): the server writes today's note, `~/.claude/office/daily/YYYY-MM-DD.md` (sessions active since yesterday 00:00 with status, one-line summary and next-task suggestions; the blackboard as it is; recent project folders), then opens a new-session input for the facilitator (just press Enter).
-2. **The facilitator is a real Claude Code session.** It runs in `~/.claude/office` and follows that folder's `CLAUDE.md` (managed by the server). It reads only today's note and what you say; no repo or vault digging, no code edits, no git. Its first message lists "finished yesterday / not finished / suggested for today", and the conversation happens in the app's chat.
+2. **The facilitator is a real Claude Code session.** It first reads the guide file named in its prompt, `~/.claude/office/CLAUDE.md` (managed by the server), and follows it (the app may open the session in a scratch workspace, so the guide is not left to the folder's CLAUDE.md). It reads only today's note and what you say; no repo or vault digging, no code edits, no git. Its first message lists "finished yesterday / not finished / suggested for today", and the conversation happens in the app's chat.
 3. Agreed items are written by the facilitator through the **blackboard CLI** (you can use it too):
    ```bash
    node bin/office.mjs todo list
