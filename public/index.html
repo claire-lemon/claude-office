@@ -26,26 +26,7 @@
       <aside class="blackboard" id="blackboard" aria-label="오늘의 할 일"></aside><!-- views/blackboard.js -->
       <div class="split-x" id="split-blackboard"></div>
       <div class="office-decor">
-        <svg id="window-svg" class="decor window" viewBox="0 0 100 70" aria-hidden="true">
-          <rect x="2" y="2" width="96" height="66" rx="4" class="frame"/>
-          <rect x="8" y="8" width="84" height="54" class="sky"/>
-          <rect x="24" y="18" width="16" height="16" class="sun" fill="var(--sun)"/>
-          <rect x="24" y="18" width="16" height="16" class="moon" fill="var(--moon)"/>
-          <rect x="60" y="16" width="3" height="3" class="star" fill="var(--star)"/>
-          <rect x="70" y="26" width="2" height="2" class="star" fill="var(--star)"/>
-          <rect x="78" y="14" width="2" height="2" class="star" fill="var(--star)"/>
-          <line x1="50" y1="8" x2="50" y2="62" class="mullion"/>
-          <line x1="8" y1="35" x2="92" y2="35" class="mullion"/>
-        </svg>
-        <svg class="decor plant" viewBox="0 0 40 60" aria-hidden="true">
-          <rect x="12" y="42" width="16" height="14" fill="var(--desk-edge)"/>
-          <rect x="10" y="40" width="20" height="4" fill="var(--desk)"/>
-          <rect x="14" y="18" width="6" height="24" fill="#6b8f57"/>
-          <rect x="8" y="10" width="12" height="12" fill="#7fae63"/>
-          <rect x="20" y="16" width="12" height="12" fill="#6b8f57"/>
-          <rect x="14" y="4" width="12" height="12" fill="#8fc274"/>
-        </svg>
-        <!-- the way into the 회의실 (main.js [data-screen]); its twin in views/meeting.js leads back -->
+        <!-- the way into the 회의실, right beside the blackboard (main.js [data-screen]); its twin in views/meeting.js leads back -->
         <button type="button" class="door" data-screen="meeting" title="회의실 들어가기">
           <svg class="door-svg" viewBox="0 -8 32 56" aria-hidden="true">
             <rect x="11" y="-7" width="10" height="5" rx="1" class="door-lamp"/><!-- lit while a meeting is on (views/office.js updateDoor) -->
@@ -61,6 +42,27 @@
           </svg>
           <span class="door-sign">회의실</span>
         </button>
+        <div class="decor-stack">
+          <svg id="window-svg" class="decor window" viewBox="0 0 100 70" aria-hidden="true">
+            <rect x="2" y="2" width="96" height="66" rx="4" class="frame"/>
+            <rect x="8" y="8" width="84" height="54" class="sky"/>
+            <rect x="24" y="18" width="16" height="16" class="sun" fill="var(--sun)"/>
+            <rect x="24" y="18" width="16" height="16" class="moon" fill="var(--moon)"/>
+            <rect x="60" y="16" width="3" height="3" class="star" fill="var(--star)"/>
+            <rect x="70" y="26" width="2" height="2" class="star" fill="var(--star)"/>
+            <rect x="78" y="14" width="2" height="2" class="star" fill="var(--star)"/>
+            <line x1="50" y1="8" x2="50" y2="62" class="mullion"/>
+            <line x1="8" y1="35" x2="92" y2="35" class="mullion"/>
+          </svg>
+          <svg class="decor plant" viewBox="0 0 40 60" aria-hidden="true">
+            <rect x="12" y="42" width="16" height="14" fill="var(--desk-edge)"/>
+            <rect x="10" y="40" width="20" height="4" fill="var(--desk)"/>
+            <rect x="14" y="18" width="6" height="24" fill="#6b8f57"/>
+            <rect x="8" y="10" width="12" height="12" fill="#7fae63"/>
+            <rect x="20" y="16" width="12" height="12" fill="#6b8f57"/>
+            <rect x="14" y="4" width="12" height="12" fill="#8fc274"/>
+          </svg>
+        </div>
       </div>
       <div class="desks" id="desks"></div>
       <section class="meeting" id="meeting" aria-label="회의실" hidden></section><!-- views/meeting.js -->
