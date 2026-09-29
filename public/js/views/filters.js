@@ -39,3 +39,12 @@ export const mountFilters = (el, onChange) => {
 export const updateCounters = list => buttons.els.forEach(b => {
   b.querySelector('.num').textContent = String(list.filter(filterById(b.dataset.filter).match).length);
 });
+
+// Tab title and alerts (views/notify.js) count exactly what the 결재 대기 counter counts, blocked included.
+// fresh = pending ids that were not pending on the previous poll; prevIds null (first poll) = none fresh,
+// so opening the page never rings.
+export const pendingAlert = (list, prevIds) => {
+  const ids = list.filter(filterById('pending').match).map(s => s.id);
+  const fresh = prevIds ? ids.filter(id => !prevIds.includes(id)) : [];
+  return { count: ids.length, ids, fresh };
+};

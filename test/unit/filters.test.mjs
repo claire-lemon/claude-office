@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FILTERS, filterById } from '../../public/js/views/filters.js';
+import { FILTERS, filterById, pendingAlert } from '../../public/js/views/filters.js';
 import { COLUMNS } from '../../public/js/views/columns.js';
 import { columnOf } from '../../src/domain/board.mjs';
 
@@ -28,4 +28,17 @@ test('FILTERS: pending counts every 결재 대기 status incl. blocked (by colum
 test('FILTERS: every columns entry is a board column', () => {
     const cols = new Set(COLUMNS.map(c => c.id));
     FILTERS.filter(f => f.columns).forEach(f => f.columns.forEach(c => assert.ok(cols.has(c), `${f.id}: ${c}`)));
+});
+
+test('pendingAlert: same count as the 결재 대기 counter (blocked included); only new arrivals are fresh', () => {
+    const list = STATUSES.map(session);
+    const first = pendingAlert(list, null);
+    assert.equal(first.count, list.filter(filterById('pending').match).length);
+    assert.deepEqual(first.ids, ['review', 'question', 'blocked']);
+    assert.deepEqual(first.fresh, []); // page load never rings
+    const blockedLater = pendingAlert(list, ['review', 'question']);
+    assert.deepEqual(blockedLater.fresh, ['blocked']); // a newly blocked session rings too
+    assert.deepEqual(pendingAlert(list, first.ids).fresh, []);
+    // one leaves, another arrives: the count stays 1 but the arrival still rings
+    assert.deepEqual(pendingAlert([session('review')], ['blocked']), { count: 1, ids: ['review'], fresh: ['review'] });
 });
