@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Claude Code hook: records the latest session event for the office dashboard.
+// Claude Code hook: records the latest session event for the office dashboard, plus a one-line history entry.
 // Must never disturb the working session: no stdout, always exit 0.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,17 +25,27 @@ try {
         if (!(event === 'Notification' && prev?.event === 'Stop')) {
             fs.mkdirSync(dir, { recursive: true });
             const tmp = `${file}.${process.pid}.tmp`;
+            const at = Date.now();
             fs.writeFileSync(
                 tmp,
                 JSON.stringify({
                     event,
-                    at: Date.now(),
+                    at,
                     cwd: input.cwd || null,
                     transcriptPath: input.transcript_path || null,
                     message: event === 'Notification' ? String(input.message || '').slice(0, 200) : null,
                 }),
             );
             fs.renameSync(tmp, file);
+            // Append-only history (docs/specs/2026-09-29-event-history-design.md). Its own try: the state
+            // above is already written, whatever happens here.
+            try {
+                const events = path.join(path.dirname(dir), 'events');
+                fs.mkdirSync(events, { recursive: true });
+                fs.appendFileSync(path.join(events, `${id}.jsonl`), `${JSON.stringify({ event, at })}\n`);
+            } catch {
+                // history is a bonus
+            }
         }
     }
 } catch {

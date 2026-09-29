@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { HOME, DAY, MAX_DESKS } from '../config.mjs';
 import { loadAppSessions } from '../sources/app-sessions.mjs';
 import { loadStates } from '../sources/hook-states.mjs';
+import { loadEvents } from '../sources/events.mjs';
 import * as decisionsStore from '../sources/decisions.mjs';
 import * as overridesStore from '../sources/overrides.mjs';
 import * as todosStore from '../sources/todos.mjs';
@@ -14,6 +15,7 @@ import { countLines, isBinaryPatch } from '../domain/diff.mjs';
 import { activeDecision, deriveStatus, seatAtDesks } from '../domain/status.mjs';
 import { parseReport } from '../domain/report.mjs';
 import { toSessionView } from '../domain/session-view.mjs';
+import { pendingSince, lastTurnMs } from '../domain/timeline.mjs';
 import { todoIdIn, assignedTo } from '../domain/todo.mjs';
 import { meetingIdIn } from '../domain/meeting.mjs';
 
@@ -70,6 +72,10 @@ export const transcriptOf = ({ cli, state, app }) => {
     return state?.transcriptPath || (cwd ? transcriptPathFor(cwd, cli) : '');
 };
 
+// Whether hooks/report.mjs has ever written a state file. False while app sessions exist = install.mjs never
+// ran (or the hook fails); the header shows the install hint then.
+export const hooksInstalled = () => loadStates().length > 0;
+
 export const listSessions = (now = Date.now()) => {
     const apps = loadAppSessions();
     const states = loadStates();
@@ -97,8 +103,9 @@ export const listSessions = (now = Date.now()) => {
         const override = overrides[id];
         const view = toSessionView({ cli, state, app, lastAt, cwd, transcript, lastText, report, id, summary, status, baseStatus, gi, diffStat, home: HOME, override });
         // Additive fields: the todo this session was started for (marker) or assigned to by hand, the 회의실
-        // meeting it was started for, and when the active lead decision was made.
+        // meeting it was started for, when the active lead decision was made, and the event-history values.
         const head = firstPromptHead(transcript);
+        const events = loadEvents(cli);
         const marker = todoIdIn(head);
         const assigned = marker ? null : assignedTo(todos, id);
         return {
@@ -107,6 +114,8 @@ export const listSessions = (now = Date.now()) => {
             todoVia: marker ? 'marker' : assigned ? 'assigned' : null,
             meetingId: meetingIdIn(head),
             decidedAt: active ? decisions[id].at : null,
+            pendingSince: view.column === 'pending' ? pendingSince(events, state) : null,
+            turnMs: lastTurnMs(events),
         };
     });
 };

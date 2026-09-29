@@ -3,18 +3,22 @@
 // MOVE_* tables. Which column a session is in and where it may go come from the server
 // (session.column / session.moves, src/domain/board.mjs); a new column is one row there and one here.
 
-// 결재 대기 order: blocked first (it stalls a session), then reports, then questions.
+// 결재 대기 order: blocked first (it stalls a session), then reports, then 보고 없음 (status 'question').
 const PENDING_ORDER = ['blocked', 'review', 'question'];
 const pendingRank = s => {
   const i = PENDING_ORDER.indexOf(s.status);
   return i < 0 ? PENDING_ORDER.length : i;
 };
 
+// Longest-waiting first (session.pendingSince, docs/specs/2026-09-29-event-history-design.md §4); the
+// status rank breaks ties. A fixed timestamp as the key keeps cards from shuffling between polls.
+const waitKey = s => (Number.isFinite(s.pendingSince) ? s.pendingSince : Number.MAX_SAFE_INTEGER);
+
 // sort?: card comparator. headerAction?: button in the column head, shown only while the column
 // has cards; its id is the DOM id main.js's click handler matches.
 export const COLUMNS = [
   { id: 'working', label: '작업 중' },
-  { id: 'pending', label: '결재 대기', sort: (a, b) => pendingRank(a) - pendingRank(b) },
+  { id: 'pending', label: '결재 대기', sort: (a, b) => waitKey(a) - waitKey(b) || pendingRank(a) - pendingRank(b) },
   { id: 'hold', label: '보류' },
   { id: 'done', label: '완료', headerAction: { id: 'archive-done', label: '모두 아카이브' } },
 ];

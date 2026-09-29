@@ -31,6 +31,7 @@ flowchart TB
 
     subgraph READ["Data the server reads"]
         ST["~/.claude/office/state/*.json<br/>last event per session"]
+        EV["~/.claude/office/events/*.jsonl<br/>event history (append-only)"]
         META["App session metadata<br/>title · branch · PR · deep link"]
         TR["Transcripts .jsonl<br/>last reply · approval report"]
         GIT["git per worktree<br/>diff · branch · project"]
@@ -41,7 +42,9 @@ flowchart TB
     UI["Browser<br/>pixel office · approval board<br/>detail panel · archive list"]
 
     S -- "hook events" --> HOOK --> ST
+    HOOK --> EV
     ST --> SRV
+    EV --> SRV
     META --> SRV
     TR --> SRV
     GIT --> SRV
@@ -67,15 +70,15 @@ src/
   config.mjs            env vars, paths, limits (the only place env vars are read)
   http/                 controller: normalize input → call a use case → respond; Host/Origin checks
   usecases/             flows: session list, changes, confirm/hold/archive, next task, summary, todo ↔ session links and assignment, meetings, AI narrative, prompt refine
-  domain/               pure functions: status, report parsing, prompts, diff parsing, todo rules, daily note, facilitator guide
-  sources/              data in/out: app session files, hook state, transcripts, decisions, git
+  domain/               pure functions: status, wait/turn times (timeline), report parsing, prompts, diff parsing, todo rules, daily note, facilitator guide
+  sources/              data in/out: app session files, hook state and event history, transcripts, decisions, git
   platform/             OS side effects: open, pbcopy, claude -p
 public/
   index.html            markup skeleton
   css/                  base · office · board · panel · changes · markdown
   js/                   main → api · store → views/ · panel/
   js/lib/               import-free modules: math (grid-math, markdown) and small DOM helpers (splitter, inline-edit)
-  js/views/             office, board, header, blackboard (blackboard.js), meeting room (meeting.js). columns.js (columns) and filters.js (filters) are rule tables
+  js/views/             office, board, header (freshness badge in freshness.js), blackboard (blackboard.js), meeting room (meeting.js). columns.js (columns) and filters.js (filters) are rule tables
   js/panel/             detail panel. actions.js (buttons) is a rule table
 test/unit/              pure-function tests
 test/integration/       server, fixtures, temp git repos
@@ -85,7 +88,7 @@ test/integration/       server, fixtures, temp git repos
 - Rules live in tables. A new column, drop rule, filter, button, or editable field is one more row (where: [design §4](docs/specs/2026-09-28-board-interactions-design.md#4-확장-지점-나중에-기능을-붙이는-곳), Korean).
 - The server (`src/domain/board.mjs`) decides which column a session is in and where it may be dropped, and sends that as `column` and `moves`. The page only displays it.
 - File writes and OS commands live only in `sources/` and `platform/`.
-- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md), [meeting room](docs/specs/2026-09-29-meeting-room-design.md), [AI narrative](docs/specs/2026-09-29-daily-narrative-design.md), [link history](docs/specs/2026-09-29-todo-history-design.md), [finishing touches](docs/specs/2026-09-29-finishing-touches-design.md)
+- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md), [meeting room](docs/specs/2026-09-29-meeting-room-design.md), [AI narrative](docs/specs/2026-09-29-daily-narrative-design.md), [link history](docs/specs/2026-09-29-todo-history-design.md), [finishing touches](docs/specs/2026-09-29-finishing-touches-design.md), [event history](docs/specs/2026-09-29-event-history-design.md); product review: [`docs/product-review-20260929.md`](docs/product-review-20260929.md)
 
 ## Try the demo first (touches no real settings)
 
@@ -110,10 +113,13 @@ Ten fake sessions change state every 8 seconds. Open `http://127.0.0.1:7770`.
 
 To open a session's panel directly: `http://127.0.0.1:7777/?open=<session id>` (add `&tab=diff` for the changes tab).
 
-Hooks only see turns that start **after** installation. Older sessions active in the last 24 hours show up grey (state unknown).
+Hooks only see turns that start **after** installation. Older sessions active in the last 24 hours show up grey (state unknown). If there are app sessions but no hook record at all, a banner under the header says to run `node install.mjs`; with no sessions at all, it shows the three setup steps.
 
 ## Office and board
 
+- **Header**: `출근` (checked in) is the number of seated sessions (active in the last 24 hours, plus held ones, 20 desks max). `결재 대기` (awaiting approval) counts reports, 보고 없음 (no report) and blocked sessions, and is the same number as the tab title `(n) 결재 대기`. A session newly entering it (blocked included) plays the sound and sends a browser notification. `n초 전 갱신` (updated n s ago) is when the last poll succeeded; if the server can't be reached it turns into a red **오프라인** (offline) badge and the screen keeps the last data. The **?** button explains bubbles, colors, tags and numbers.
+- **Bubbles**: ⌨️ 타닥타닥 (working) · 🖐️ 보고드려요 (report ready) · 💬 보고 없음 (the turn ended without a report block) · 💦 도와주세요 (blocked, e.g. a permission prompt) · ☕ 완료 (done) · ⏸️ 보류 (hold). A greyscale employee has no hook record. The API status value is unchanged (`question` = 보고 없음).
+- **Awaiting-approval order**: the card that has waited longest is on top and shows `n분째 대기` (waiting n min). The wait comes from the hook event history (`~/.claude/office/events/`; repeated events count from the first stop). Sessions without history use their last event time.
 - **Seats**: desks open five at a time and there is always an empty one (7 sessions → 10 desks, 10 → 15). A row holds at most 10 desks, then wraps. An employee keeps their desk.
 - **Resize**: drag the handle between the office and the board to change their heights, and the handles between board columns to change column widths. Desk size follows the office size and head count. Double-click resets; sizes are saved in the browser. Below 800px wide the page just flows top to bottom, without handles.
 - **Drag cards**: while you drag a card, the columns that accept it show a dashed border and a label.
@@ -177,9 +183,10 @@ The **meeting room door** next to the blackboard (it swings open on hover; while
 
 ## Detail panel
 
-- **Report tab**: the approval report rendered as markdown. Each "다음 작업" (next task) item has its own **▶ 진행** (run) button.
+- **Report tab**: the approval report rendered as markdown. Each "다음 작업" (next task) item has its own **▶ 진행** (run) button. Without a report it falls back to the 요약 만들기 (summary) result, then the Claude app's own per-turn summary (**앱 요약**, no model call), then the whole last reply.
+- **Subtitle**: `animal · branch · PR · n turns · 지난 턴 n분` (last turn took n min, `UserPromptSubmit` → `Stop` from the event history).
 - **Changes tab**: first shows what it compared against (base branch) and `+added −deleted · files · new files`. New files show their **full content** whether committed or not, and new `.md` files switch between **미리보기 / 원문** (preview / raw); the preview shows a file's YAML frontmatter as a small table, and `[[path|label]]` links show just their label, with the path on hover (code is left as written). Sessions opened without a worktree are compared in their folder's git repo. When there are no changes, it says why. It reloads when the session moves on.
-- **Footer**: row 1 is the primary action and "채팅방 열기" (open chat). The primary action is "컨펌 · 커밋·PR" (confirm) while awaiting approval, or "OK · 1번 진행 ▾" (run next task #1, ▾ for #2/#3) when next tasks exist. Row 2 holds the rest (summary, hold, …), with archive in red at the far right.
+- **Footer**: row 1 is the primary action and "채팅방 열기" (open chat). The primary action is "컨펌 · 커밋·PR" (confirm) while awaiting approval, or "OK · 1번 진행 ▾" (run next task #1, ▾ for #2/#3) when next tasks exist. Row 2 holds the rest (summary, hold, …), with archive in red at the far right. Hovering a button says what it does (OK = mark this session done and open a new session's input box; confirm = copy the instruction and open the chat, you paste and press Enter).
 - **Rename**: click the name at the top of the panel to edit it. Enter or clicking elsewhere saves, Esc cancels, and saving it empty brings back the app's name. The new name is dashboard-only; the Claude app's sidebar keeps its own.
 - **Resize**: drag the panel's left edge, or focus the handle and use ←/→; double-click resets the width. The width is saved in the browser.
 
@@ -188,7 +195,7 @@ The **meeting room door** next to the blackboard (it swings open on hover; while
 | Column | Meaning |
 |---|---|
 | 작업 중 (working) | The session is running |
-| 결재 대기 (awaiting approval) | Finished with a report, asked a question, or blocked on a permission prompt (red "막힘" tag) |
+| 결재 대기 (awaiting approval) | Finished with a report, finished without one ("보고 없음" tag), or blocked on a permission prompt (red "막힘" tag). Longest-waiting first |
 | 보류 (on hold) | You parked it |
 | 완료 (done) | You confirmed it |
 
@@ -210,7 +217,7 @@ The **meeting room door** next to the blackboard (it swings open on hover; while
 node install.mjs --uninstall
 ```
 
-Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office` (decisions, renames, todos, daily notes and the facilitator guide live there). The dashboard only reads app data and sessions, so nothing else changes.
+Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office` (decisions, renames, todos, daily notes, the facilitator guide and the event history live there). To drop only the event history, `rm -rf ~/.claude/office/events` (wait times fall back to the last event and the last-turn time goes blank). The dashboard only reads app data and sessions, so nothing else changes.
 
 ## Tests
 
@@ -229,4 +236,6 @@ node scripts/metrics.mjs
 - The AI narrative runs on a timer inside the server, so nothing is written while the server is off (it checks as soon as it starts). To run it without the server, put `node bin/office.mjs narrate` in cron/launchd. The narrative is a model summary and can be wrong (for example, blending two sessions into one sentence).
 - Todo ↔ session links rely on the `#todo-…` marker in a new session's first prompt. Delete that line before sending and the session won't link (start it from the blackboard again).
 - Dragging cards needs a mouse. From the keyboard, the detail panel's hold / unhold / confirm buttons do the same.
+- The event history is never pruned automatically. A line is about 50 bytes, so even a 200-turn session is around 30KB, and the server reads only the last 64KB.
+- No token or cost figures yet (it needs an incremental read of the whole transcript; see [event history design §7](docs/specs/2026-09-29-event-history-design.md)).
 - The dashboard parses the Korean `## 결재 보고` heading and its sub-headings exactly as written.

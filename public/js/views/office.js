@@ -44,7 +44,8 @@ const deskSvg = session => {
 const BUBBLE_HTML = {
   working: '<div class="bubble"><span class="b-icon">⌨️</span><span class="b-text">타닥타닥</span></div>',
   review: '<div class="bubble"><span class="b-icon anim-wave-emoji">🖐️</span><span class="b-text">보고드려요</span><span class="b-paper">📄</span></div>',
-  question: '<div class="bubble"><span class="b-icon">❓</span><span class="b-text">질문 있어요</span></div>',
+  // 'question' = Stop without a 결재 보고 block (domain/status.mjs); the status id stays for API compatibility.
+  question: '<div class="bubble"><span class="b-icon">💬</span><span class="b-text">보고 없음</span></div>',
   blocked: '<div class="bubble bubble-danger"><span class="b-icon">💦</span><span class="b-text">도와주세요</span></div>',
   done: '<div class="bubble"><span class="b-icon">☕<span class="steam s1"></span><span class="steam s2"></span></span><span class="b-text">완료</span></div>',
   hold: '<div class="bubble"><span class="b-icon">⏸️</span><span class="b-text">보류</span></div>',

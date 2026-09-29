@@ -1,6 +1,6 @@
 // Route table 'METHOD /api/name' -> handler(req, res, id, url). Handlers only normalize input, call a
 // usecase, and map to status codes -- same status codes and JSON bodies as before.
-import { listSessions } from '../usecases/list-sessions.mjs';
+import { listSessions, hooksInstalled } from '../usecases/list-sessions.mjs';
 import { getChanges } from '../usecases/get-changes.mjs';
 import * as decide from '../usecases/decide.mjs';
 import { startNextTask } from '../usecases/next-task.mjs';
@@ -32,7 +32,7 @@ const MEETING_ACTIONS = { start: startMeeting, end: endMeeting, narrate: () => n
 const MEETING_STATUS = { narrate: 202 };
 
 export const routes = {
-    'GET /api/sessions': (req, res) => send(res, 200, { now: Date.now(), sessions: listSessions() }),
+    'GET /api/sessions': (req, res) => send(res, 200, { now: Date.now(), sessions: listSessions(), hooksInstalled: hooksInstalled() }),
     'GET /api/diff': (req, res, id) => {
         const s = findSession(id);
         return s ? send(res, 200, getChanges(s)) : send(res, 404, { error: 'unknown session' });

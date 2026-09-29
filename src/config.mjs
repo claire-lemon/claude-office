@@ -12,6 +12,7 @@ export const OFFICE_DIR = path.join(HOME, '.claude/office');
 // Where the app opens a session started without a project folder (the meeting facilitator lands here too).
 export const APP_SCRATCH_DIR = path.join(HOME, 'Library/Application Support/Claude/scratch-workspaces');
 export const STATE_DIR = path.join(OFFICE_DIR, 'state');
+export const EVENTS_DIR = path.join(OFFICE_DIR, 'events'); // hook history <cli id>.jsonl (event-history design §3)
 export const CONFIRMED_FILE = path.join(OFFICE_DIR, 'confirmed.json');
 export const SUMMARY_DIR = path.join(OFFICE_DIR, 'summaries');
 export const DECISIONS_FILE = path.join(OFFICE_DIR, 'decisions.json');
@@ -28,6 +29,7 @@ export const DRY = !!process.env.OFFICE_DRY;
 export const DAY = 24 * 60 * 60 * 1000;
 export const MAX_DESKS = 20;
 export const TAIL_BYTES = 256 * 1024;
+export const EVENTS_TAIL_BYTES = 64 * 1024; // event history read per session (event-history design §5)
 // Transcript head scanned for #todo- / #meeting- markers. A real transcript opens with ~30KB of app
 // preamble (queue entries, hook attachments) before the first prompt, so 16KB missed it.
 export const HEAD_BYTES = 256 * 1024;
