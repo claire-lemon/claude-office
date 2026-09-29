@@ -54,6 +54,7 @@ const render = () => {
   else office.renderOffice(list.filter(f.match), { showEmpty: false });
   board.renderKanban(list, f);
   updateCounters(list);
+  office.updateDoor(list); // the full list: a filter doesn't end the meeting
 };
 mountFilters($('.counters'), render);
 mountBoardDnd($('.kan-columns'), { onEnd: render });

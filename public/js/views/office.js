@@ -123,6 +123,22 @@ export const renderOffice = (sessions, { showEmpty = true } = {}) => {
 renderOffice([]); // first empty block before the first poll, so the office never flashes empty
 
 // ---------- window day/night ----------
+// 회의 중 on the office door: today's facilitator is still on the board (회의 끝 archives it; the
+// server's facilitators() in usecases/meeting.mjs picks today's the same way, by the #meeting-<date>- id).
+const todayPrefix = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-`;
+};
+export const updateDoor = list => {
+  const door = $('.office-decor .door');
+  const prefix = todayPrefix();
+  const on = list.some(s => s.meetingId?.startsWith(prefix));
+  if (!door || door.classList.contains('on') === on) return;
+  door.classList.toggle('on', on);
+  door.querySelector('.door-sign').textContent = on ? '회의 중' : '회의실';
+  door.title = on ? '회의 중 · 들어가기' : '회의실 들어가기';
+};
+
 export const updateWindow = () => {
   const h = new Date().getHours();
   $('#window-svg').classList.toggle('night', !(h >= 6 && h < 18));

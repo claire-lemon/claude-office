@@ -47,7 +47,9 @@
         </svg>
         <!-- the way into the 회의실 (main.js [data-screen]); its twin in views/meeting.js leads back -->
         <button type="button" class="door" data-screen="meeting" title="회의실 들어가기">
-          <svg class="door-svg" viewBox="0 0 32 48" aria-hidden="true">
+          <svg class="door-svg" viewBox="0 -8 32 56" aria-hidden="true">
+            <rect x="11" y="-7" width="10" height="5" rx="1" class="door-lamp"/><!-- lit while a meeting is on (views/office.js updateDoor) -->
+            <rect x="15" y="-2" width="2" height="2" class="door-frame"/>
             <rect x="0" y="0" width="32" height="48" class="door-frame"/>
             <rect x="3" y="3" width="26" height="45" class="door-gap"/>
             <g class="door-leaf">

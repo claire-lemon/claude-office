@@ -13,7 +13,7 @@
   .plant{width:28px; height:42px;}
   /* 회의실 doors (index.html office-decor, views/meeting.js exit): the leaf swings open on hover to the room's light */
   .door{display:flex; flex-direction:column; align-items:center; gap:2px; margin-top:4px; padding:0; background:none; border:none; color:var(--ink);}
-  .door-svg{display:block; width:40px; height:60px; shape-rendering:crispEdges; overflow:visible;}
+  .door-svg{display:block; width:40px; height:auto; shape-rendering:crispEdges; overflow:visible;}
   .door-frame{fill:var(--desk-edge);}
   .door-gap{fill:#ffe7a8;}
   .door-wood{fill:var(--desk);}
@@ -21,6 +21,13 @@
   .door-knob{fill:var(--sun);}
   .door-leaf{transform-box:fill-box; transform-origin:left center; transition:transform .2s ease;}
   .door:hover .door-leaf,.door:focus-visible .door-leaf{transform:scaleX(.6);}
+  /* 회의 중: the lamp glows, the door stands ajar and the sign says so (views/office.js updateDoor) */
+  .door-lamp{fill:var(--line);}
+  .door.on .door-lamp{fill:#ff7a7a; animation:lamp-glow 1.6s ease-in-out infinite;}
+  .door.on .door-leaf{transform:scaleX(.88);}
+  .door.on:hover .door-leaf,.door.on:focus-visible .door-leaf{transform:scaleX(.6);}
+  .door.on .door-sign{background:var(--accent); border-color:var(--accent); color:#4a3b2f;}
+  @keyframes lamp-glow{0%,100%{filter:drop-shadow(0 0 1px #ff7a7a)} 50%{filter:drop-shadow(0 0 4px #ff7a7a)}}
   .door:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px;}
   .door-sign{font-size:11px; font-weight:600; line-height:16px; padding:0 6px; background:var(--bg); border:1px solid var(--line); border-radius:6px; white-space:nowrap;}
 
