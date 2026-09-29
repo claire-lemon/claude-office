@@ -145,3 +145,11 @@ export const mergeLinks = (stored, live) => {
 // Anything happened to the todo at or after `since`: written, done, deleted, checked, or a session moved.
 export const touchedSince = (view, since) =>
     [view.createdAt, view.doneAt, view.deletedAt, view.manual?.at, ...(view.sessions || []).map(s => s.lastAt)].some(t => t != null && t >= since);
+
+// ── project folders (the add form, the note's 최근 프로젝트 폴더, the facilitator's folder names) ──
+
+// The app puts a session's worktree at <repo>/.claude/worktrees/<name>: that is the repo's work.
+export const repoFolder = p => String(p ?? '').match(/^(.+?)\/\.claude\/worktrees\/[^/]+(?:\/|$)/)?.[1] ?? String(p ?? '');
+
+// Not a project: the home folder itself (it may even be a git repo) and the app's / office's own working dirs.
+export const isProjectFolder = (p, { home, skip = [] }) => !!p && p !== home && !skip.some(d => p === d || p.startsWith(`${d}/`));

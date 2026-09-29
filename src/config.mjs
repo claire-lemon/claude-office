@@ -9,6 +9,8 @@ export const HOME = process.env.OFFICE_HOME || os.homedir();
 export const APP_DIR =
     process.env.OFFICE_APP_DIR || path.join(HOME, 'Library/Application Support/Claude/claude-code-sessions');
 export const OFFICE_DIR = path.join(HOME, '.claude/office');
+// Where the app opens a session started without a project folder (the meeting facilitator lands here too).
+export const APP_SCRATCH_DIR = path.join(HOME, 'Library/Application Support/Claude/scratch-workspaces');
 export const STATE_DIR = path.join(OFFICE_DIR, 'state');
 export const CONFIRMED_FILE = path.join(OFFICE_DIR, 'confirmed.json');
 export const SUMMARY_DIR = path.join(OFFICE_DIR, 'summaries');

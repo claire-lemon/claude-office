@@ -162,7 +162,9 @@ test('folders: existing app-session repo folders, newest first, once each, cappe
     const { folders } = await list();
     assert.equal(folders.length, TODO_FOLDERS_LIMIT);
     assert.deepEqual(folders.map(f => f.path), [repoA, repoB, ...extras.slice(0, TODO_FOLDERS_LIMIT - 2)]);
-    assert.deepEqual(folders[0], { path: repoA, name: 'api', lastAt: NOW - 60_000 });
+    // lastAt = the newest of the session activity and the 칠판 todos made there (earlier tests made some)
+    assert.deepEqual([folders[0].path, folders[0].name], [repoA, 'api']);
+    assert.ok(folders[0].lastAt >= NOW - 60_000);
 });
 
 test('start (dry run): new-session link with the folder and the marker as the first line', async () => {

@@ -132,6 +132,7 @@ Hooks only see turns that start **after** installation. Older sessions active in
 A chalkboard on the office's left wall holds today's todos. Each item has a **시작** (start) button that opens a new session for that job — like assigning a PR to an issue.
 
 1. **+ 할 일 추가** (add): title, project folder (pick one of the folders recent sessions used, or type a path), optional notes. Enter saves, Esc cancels.
+   - Folder candidates are recent sessions' repos (a worktree `…/.claude/worktrees/…` counts as its repo) plus folders the blackboard's todos use. The home folder itself, `~/.claude/office` and the app's scratch workspaces are left out. The meeting facilitator and the note's `## 최근 프로젝트 폴더` use the same list.
 2. **Start** opens a new-session input box with the prompt filled in (just press Enter). Its first line is `📋 오늘의 할 일 #todo-a1b2c3 · <title>`; the server finds that marker in the session's transcript and links the session to the todo. Sessions started from it with "다음 작업 ▶ 진행" inherit the marker and stay linked.
 3. The linked worker's face and a status chip appear on the item; clicking it opens that session's panel. Board cards and the panel show a 📋 tag too. When several sessions worked on one todo (a restart, a follow-up session), **+n** next to the chip expands the earlier ones, oldest first.
 4. Todo status is computed by the server from the linked session.

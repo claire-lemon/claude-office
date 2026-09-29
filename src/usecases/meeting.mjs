@@ -3,7 +3,7 @@
 // (meeting-board-sync design §2.2), and close a meeting into the note.
 import fs from 'node:fs';
 import path from 'node:path';
-import { OFFICE_DIR, GUIDE_FILE } from '../config.mjs';
+import { OFFICE_DIR, GUIDE_FILE, HOME, APP_SCRATCH_DIR } from '../config.mjs';
 import * as decisionsStore from '../sources/decisions.mjs';
 import * as overridesStore from '../sources/overrides.mjs';
 import * as todosStore from '../sources/todos.mjs';
@@ -13,7 +13,7 @@ import { firstPromptHead, lastAssistantText } from '../sources/transcripts.mjs';
 import { columnOf } from '../domain/board.mjs';
 import { ANIMALS, hash } from '../domain/session-view.mjs';
 import { meetingIdIn, meetingId, meetingPrompt, facilitatorGuide, GUIDE_HEADER, boardItems, syncPlan } from '../domain/meeting.mjs';
-import { visibleToday } from '../domain/todo.mjs';
+import { visibleToday, isProjectFolder } from '../domain/todo.mjs';
 import { autoSection, replaceAuto, meetingSection, appendSection, localDate, startOfYesterday, narrativeOf } from '../domain/daily-note.mjs';
 import { newSessionLink } from '../domain/prompts.mjs';
 import { openUrl } from '../platform/macos.mjs';
@@ -78,6 +78,16 @@ const outcome = (kind, todo, result) => ({ kind, title: todo.title, folder: todo
 
 // The latest open facilitator's last `### 칠판` list -> create / update / soft delete. force = plan again even
 // for a reply already handled (회의 끝). A reply without a list changes nothing, so it never clears the 칠판.
+// The facilitator may write an absolute path the user gave it (not in 최근 프로젝트 폴더): a real project folder
+// on disk is accepted as is.
+const withNamedPaths = (list, items) => {
+    const known = new Set(list.map(f => f.path));
+    const extra = [...new Set(items.map(i => i.folder).filter(p => p.startsWith('/') && !known.has(p)))]
+        .filter(p => isProjectFolder(p, { home: HOME, skip: [OFFICE_DIR, APP_SCRATCH_DIR] }) && fs.existsSync(p) && fs.statSync(p).isDirectory())
+        .map(p => ({ path: p, name: path.basename(p) }));
+    return [...list, ...extra];
+};
+
 export const syncMeetingBoard = (now = Date.now(), { force = false } = {}) => {
     const [latest] = facilitators(now);
     if (!latest || latest.view.status === 'archived') return synced(null);
@@ -92,7 +102,7 @@ export const syncMeetingBoard = (now = Date.now(), { force = false } = {}) => {
     }
     // Today's 칠판 (duplicates) plus this meeting's own, deleted ones too (a deleted one is not written again).
     const todos = allViews(now).filter(v => v.meeting?.id === id || (!v.deletedAt && visibleToday(v, now)));
-    const plan = syncPlan({ meetingId: id, items, todos, folders: folders() });
+    const plan = syncPlan({ meetingId: id, items, todos, folders: withNamedPaths(folders(), items) });
     const byId = new Map(todos.map(t => [t.id, t]));
     const writes = [
         ...plan.create.map(c => outcome('created', c, createTodo({ title: c.title, folder: c.folder, detail: c.detail }, now, { source: 'scrum', meeting: { id, key: c.key } }))),

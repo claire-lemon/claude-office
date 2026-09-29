@@ -28,7 +28,7 @@ test('meetingPrompt: marker first line, note path, CLAUDE.md pointer, within the
 
 test('facilitatorGuide v4: version header first, no CLI, the 칠판 list format and the hard rules', () => {
     const guide = facilitatorGuide();
-    assert.equal(GUIDE_VERSION, 4);
+    assert.equal(GUIDE_VERSION, 5);
     assert.equal(GUIDE_HEADER, `<!-- claude-office guide v${GUIDE_VERSION} -->`);
     assert.equal(guide.split('\n')[0], GUIDE_HEADER);
     // the facilitator only talks: its list is the day's todos, the server writes them

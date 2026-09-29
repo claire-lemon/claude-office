@@ -228,3 +228,25 @@ test('touchedSince: any of created / done / deleted / manual check / a session a
     assert.equal(touchedSince({ ...base, sessions: [{ lastAt: 20 }, { lastAt: 150 }] }, 100), true);
     assert.equal(touchedSince({ ...base, doneAt: 50, deletedAt: 60, manual: { state: 'done', at: 50 }, sessions: [{ lastAt: 99 }] }, 100), false);
 });
+
+test('repoFolder: an app worktree counts as its repo; anything else is itself', async () => {
+    const { repoFolder } = await import('../../src/domain/todo.mjs');
+    assert.equal(repoFolder('/u/code/api/.claude/worktrees/fix-1a2b3c'), '/u/code/api');
+    assert.equal(repoFolder('/u/code/api/.claude/worktrees/fix-1a2b3c/sub'), '/u/code/api');
+    assert.equal(repoFolder('/u/.claude/worktrees/scratchy-9f8e7d'), '/u'); // a worktree of the home repo -> home
+    assert.equal(repoFolder('/u/code/api'), '/u/code/api');
+    assert.equal(repoFolder(undefined), '');
+});
+
+test('isProjectFolder: not home itself, not inside the skipped dirs', async () => {
+    const { isProjectFolder } = await import('../../src/domain/todo.mjs');
+    const opts = { home: '/u', skip: ['/u/.claude/office', '/u/Library/Application Support/Claude/scratch-workspaces'] };
+    assert.equal(isProjectFolder('/u', opts), false);
+    assert.equal(isProjectFolder('/u/.claude/office', opts), false);
+    assert.equal(isProjectFolder('/u/.claude/office/.claude/worktrees/x', opts), false);
+    assert.equal(isProjectFolder('/u/Library/Application Support/Claude/scratch-workspaces/a/b', opts), false);
+    assert.equal(isProjectFolder('/u/code/api', opts), true);
+    assert.equal(isProjectFolder('/u/Desktop/docs', opts), true); // inside home is fine
+    assert.equal(isProjectFolder('/u/.claude/office-notes', opts), true); // a prefix is not a parent
+    assert.equal(isProjectFolder('', opts), false);
+});

@@ -3,12 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { TODO_FOLDERS_LIMIT, OFFICE_DIR } from '../config.mjs';
+import { TODO_FOLDERS_LIMIT, OFFICE_DIR, APP_SCRATCH_DIR, HOME } from '../config.mjs';
 import * as todosStore from '../sources/todos.mjs';
 import * as decisionsStore from '../sources/decisions.mjs';
 import { loadAppSessions } from '../sources/app-sessions.mjs';
 import { firstPromptHead } from '../sources/transcripts.mjs';
-import { normalizeTodoPatch, toTodoView, visibleToday, isSameLocalDay, touchedSince, todoIdIn, assignedTo } from '../domain/todo.mjs';
+import { normalizeTodoPatch, toTodoView, visibleToday, isSameLocalDay, touchedSince, todoIdIn, assignedTo, repoFolder, isProjectFolder } from '../domain/todo.mjs';
 import { todoPrompt, newSessionLink } from '../domain/prompts.mjs';
 import { openUrl } from '../platform/macos.mjs';
 import { listSessions, collectCandidates, transcriptOf } from './list-sessions.mjs';
@@ -25,22 +25,21 @@ const find = (file, id) => (Object.hasOwn(file, id) ? file[id] : null);
 const links = now => linkIndex(listSessions(now), now);
 const viewOf = (id, todo, index, now) => toTodoView({ id, todo, sessions: index.get(id) ?? [], now });
 
-// Recent project folders for the add form: each app session's repo folder once, newest activity first.
-// OFFICE_DIR is the 회의실 facilitator's folder, not a project.
-export const folders = () =>
-    [
-        ...Map.groupBy(
-            loadAppSessions()
-                .map(a => ({ path: a.originCwd || a.cwd, lastAt: a.lastActivityAt || 0 }))
-                .filter(f => f.path && f.path !== OFFICE_DIR)
-                .sort((a, b) => b.lastAt - a.lastAt),
-            f => f.path,
-        ).values(),
-    ]
+// Recent project folders (the add form, the note's 최근 프로젝트 폴더, the facilitator's folder names).
+// Home, OFFICE_DIR and the app's scratch workspaces are not projects.
+export const folders = () => {
+    const skip = [OFFICE_DIR, APP_SCRATCH_DIR];
+    // App sessions (a worktree counts as its repo) plus folders the 칠판 already uses, newest first, once each.
+    const seen = [
+        ...loadAppSessions().map(a => ({ path: repoFolder(a.originCwd || a.cwd), lastAt: a.lastActivityAt || 0 })),
+        ...Object.values(todosStore.load()).filter(t => !t.deletedAt).map(t => ({ path: t.folder, lastAt: t.createdAt || 0 })),
+    ];
+    return [...Map.groupBy(seen.filter(f => isProjectFolder(f.path, { home: HOME, skip })).sort((a, b) => b.lastAt - a.lastAt), f => f.path).values()]
         .map(([newest]) => newest)
         .filter(f => isDir(f.path))
         .slice(0, TODO_FOLDERS_LIMIT)
         .map(f => ({ path: f.path, name: path.basename(f.path), lastAt: f.lastAt }));
+};
 
 // Every todo as a view, deleted ones included (one linkIndex per call).
 export const allViews = now => {

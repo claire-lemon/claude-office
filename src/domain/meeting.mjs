@@ -18,7 +18,7 @@ export const meetingPrompt = (id, notePath, guidePath) =>
 
 // First line of CLAUDE.md. The server rewrites the guide only when this line differs, so hand edits
 // survive until the version is bumped.
-export const GUIDE_VERSION = 4;
+export const GUIDE_VERSION = 5;
 export const GUIDE_HEADER = `<!-- claude-office guide v${GUIDE_VERSION} -->`;
 
 // v3 (meeting-board-sync design §2.4): no CLI. The facilitator only talks; its `### 칠판` list is the day's
@@ -101,6 +101,8 @@ export const facilitatorGuide = () => `${GUIDE_HEADER}
 1. 폴더 이름은 일지 \`## 최근 프로젝트 폴더\`의 이름(또는 절대 경로) 중 하나를 그대로 씀
    1. 어제 세션 줄 끝의 \`📁 이름\`이 그 일을 한 폴더
 2. 맞는 폴더가 없으면 사용자에게 어느 폴더인지 묻고, 답을 들을 때까지 그 항목은 목록에서 뺌
+   1. 사용자가 경로를 알려주면 그 절대 경로(\`/\`로 시작)를 폴더 자리에 그대로 씀
+3. 홈 폴더 자체는 프로젝트 폴더가 아님 (목록에도 없음)
 `;
 
 // ── 칠판 sync (meeting-board-sync design §2.1-2.2): the facilitator's list -> a plan of todo writes ──
