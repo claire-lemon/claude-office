@@ -7,7 +7,7 @@ import * as board from './views/board.js';
 import { mountBoardDnd } from './views/board-dnd.js';
 import { filterById, mountFilters, updateCounters } from './views/filters.js';
 import * as notify from './views/notify.js';
-import { health, renderFreshness, renderHookBanner } from './views/freshness.js';
+import { health, renderFreshness, renderNotices } from './views/freshness.js';
 import * as archive from './views/archive.js';
 import { mountBlackboard, renderBlackboard } from './views/blackboard.js';
 import { mountMeeting, renderMeeting, setScreen } from './views/meeting.js';
@@ -103,7 +103,7 @@ const poll = async () => {
     health.failed = true;
   }
   renderFreshness();
-  renderHookBanner();
+  renderNotices();
   renderBlackboard(todos, state.sessionsById); // after sessions: a linked worker is clickable only while on the board
   if (view.screen === 'meeting') renderMeeting(meeting.data, todos);
 };

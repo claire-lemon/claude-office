@@ -57,10 +57,11 @@ document.addEventListener('keydown', e => {
 const buttonHtml = (item, cls, loading) => {
   const busy = item.id === 'summary' && loading;
   const label = busy ? '생성 중... (최대 60초)' : item.label;
-  return `<button type="button" class="act-btn${cls}" data-action="${item.id}"${busy ? ' disabled' : ''}>${escapeHtml(label)}</button>`;
+  const title = item.hint ? ` title="${escapeHtml(item.hint)}"` : '';
+  return `<button type="button" class="act-btn${cls}" data-action="${item.id}"${title}${busy ? ' disabled' : ''}>${escapeHtml(label)}</button>`;
 };
 
-const splitOptionHtml = opt => `<button type="button" class="act-btn act-menu-item" role="menuitem" data-action="${opt.id}">${escapeHtml(opt.label)}</button>`;
+const splitOptionHtml = opt => `<button type="button" class="act-btn act-menu-item" role="menuitem" data-action="${opt.id}" title="${escapeHtml(opt.hint || '')}">${escapeHtml(opt.label)}</button>`;
 
 const primaryHtml = primary => {
   if (!primary) return '';

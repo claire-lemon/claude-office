@@ -99,6 +99,7 @@ const updateCard = (card, session) => {
   const dsEl = card.querySelector('.kan-diffstat');
   const dsHtml = diffStatHtml(session);
   dsEl.innerHTML = dsHtml;
+  dsEl.title = `${session.sourceBranch || 'HEAD'} 기준 변경 (새 파일 포함)`;
   dsEl.classList.toggle('hidden', !dsHtml);
   card.classList.toggle('selected', session.id === selected.id);
 };

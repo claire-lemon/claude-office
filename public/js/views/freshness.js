@@ -23,7 +23,9 @@ export const renderFreshness = () => {
   el.title = offline ? '서버에 연결하지 못했어요. 화면은 마지막으로 받은 데이터예요 (node server.mjs 실행 중인지 확인)' : '2초마다 서버에서 다시 받아와요';
 };
 
-// App sessions on the board but no hook state at all = install.mjs never ran (or the hook fails).
-export const renderHookBanner = () => {
+// Nobody seated after a good poll = the 3-step setup guide. App sessions on the board but no hook
+// state at all = install.mjs never ran (or the hook fails).
+export const renderNotices = () => {
+  $('#notice-empty').hidden = !health.okAt || health.sessions > 0;
   $('#notice-hooks').hidden = health.hooksInstalled || health.sessions === 0;
 };

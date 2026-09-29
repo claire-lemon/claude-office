@@ -16,7 +16,7 @@ const nextTasksHtml = session => {
     <li class="task-item">
       <div class="task-item-row">
         <span class="task-item-text">${inlineMd(t.title)}</span>
-        <button type="button" class="act-btn task-next-btn" data-action="next:${i}">▶ 진행</button>
+        <button type="button" class="act-btn task-next-btn" data-action="next:${i}" title="이 세션을 완료로 옮기고, 이 작업이 채워진 새 세션 입력창을 열어요">▶ 진행</button>
       </div>
       ${t.detail ? `<div class="task-item-detail">${renderMarkdown(t.detail)}</div>` : ''}
     </li>`).join('');
