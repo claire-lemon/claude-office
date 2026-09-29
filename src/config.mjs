@@ -18,7 +18,6 @@ export const TODOS_FILE = path.join(OFFICE_DIR, 'todos.json');
 export const LINKS_FILE = path.join(OFFICE_DIR, 'links.json'); // 할 일 ↔ 세션 연결 스냅샷 (todo-history design §3.1)
 export const DAILY_DIR = path.join(OFFICE_DIR, 'daily'); // 오늘 일지 YYYY-MM-DD.md
 export const GUIDE_FILE = path.join(OFFICE_DIR, 'CLAUDE.md'); // the facilitator session's instructions
-export const CLI_PATH = path.join(ROOT, 'bin/office.mjs'); // 칠판 CLI, written into the guide
 
 export const PORT = Number(process.env.OFFICE_PORT || 7777);
 export const PUBLIC_DIR = path.join(ROOT, process.env.OFFICE_PUBLIC || 'public');
@@ -39,3 +38,5 @@ export const NARRATE_HOUR = 5;
 export const NARRATE_EVERY = 10 * 60 * 1000; // server check interval (a failed run retries on the next check)
 // The server timer runs for the real office only: fixture homes (tests, demo, metrics) never call the model.
 export const NARRATE_AUTO = !DRY && HOME === os.homedir();
+// 회의실 → 칠판 (meeting-board-sync design §2.3): how often the server copies the facilitator's `### 칠판` list.
+export const MEETING_SYNC_EVERY = 3000;

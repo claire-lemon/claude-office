@@ -43,6 +43,10 @@
   .mt-err{margin:4px 0 0; font-size:12px; color:var(--bad); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .mt-hint{margin:-4px 0 0; line-height:1.5;}
   .mt-hint[hidden]{display:none;}
+  /* 칠판에 반영 status line (meeting-board-sync design §2.6) */
+  .mt-board{margin:-4px 0 0; font-size:12px; line-height:1.5;}
+  .mt-board[hidden]{display:none;}
+  .mt-board .mt-skip{color:var(--bad);}
   .mt-link{background:none; border:none; padding:0; font:inherit; color:var(--accent); text-decoration:underline; cursor:pointer;}
   .mt-link:disabled{opacity:.6; cursor:default;}
 

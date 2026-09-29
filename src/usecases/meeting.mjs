@@ -1,8 +1,9 @@
 // 회의실 flows (meeting-room design §2, §4, §5): find today's facilitator sessions by their #meeting- marker,
-// keep the 오늘 일지 auto block fresh, open a facilitator session, and close a meeting into the note.
+// keep the 오늘 일지 auto block fresh, open a facilitator session, copy its `### 칠판` list onto the 칠판
+// (meeting-board-sync design §2.2), and close a meeting into the note.
 import fs from 'node:fs';
 import path from 'node:path';
-import { OFFICE_DIR, CLI_PATH, GUIDE_FILE } from '../config.mjs';
+import { OFFICE_DIR, GUIDE_FILE } from '../config.mjs';
 import * as decisionsStore from '../sources/decisions.mjs';
 import * as overridesStore from '../sources/overrides.mjs';
 import * as todosStore from '../sources/todos.mjs';
@@ -11,13 +12,14 @@ import { ensureGuide } from '../sources/office-guide.mjs';
 import { firstPromptHead, lastAssistantText } from '../sources/transcripts.mjs';
 import { columnOf } from '../domain/board.mjs';
 import { ANIMALS, hash } from '../domain/session-view.mjs';
-import { meetingIdIn, meetingId, meetingPrompt, facilitatorGuide, GUIDE_HEADER } from '../domain/meeting.mjs';
+import { meetingIdIn, meetingId, meetingPrompt, facilitatorGuide, GUIDE_HEADER, boardItems, syncPlan } from '../domain/meeting.mjs';
+import { visibleToday } from '../domain/todo.mjs';
 import { autoSection, replaceAuto, meetingSection, appendSection, localDate, startOfYesterday, narrativeOf } from '../domain/daily-note.mjs';
 import { newSessionLink } from '../domain/prompts.mjs';
 import { openUrl } from '../platform/macos.mjs';
 import { archive } from './decide.mjs';
 import { collectCandidates, transcriptOf, listSessions } from './list-sessions.mjs';
-import { listTodos } from './todos.mjs';
+import { listTodos, allViews, folders, createTodo, updateTodo, deleteTodo } from './todos.mjs';
 // Import cycle (narrate.mjs uses refreshNote/recentWork): fine, both sides read the other only inside functions.
 import { narrationState } from './narrate.mjs';
 
@@ -64,6 +66,55 @@ export const facilitators = (now = Date.now()) => {
         .sort((a, b) => b.n - a.n);
 };
 
+// ── 칠판 sync (meeting-board-sync design §2.2-2.3): the server timer and 회의 끝 call it ──
+
+// meetingId -> hash of the reply last handled: an unchanged reply is not planned again.
+const handled = new Map();
+// The last sync's result for the 회의실 status line (skipped items belong to that meeting only).
+const lastSync = { meetingId: null, skipped: [], at: null };
+const synced = (meetingId, counts = {}) => ({ meetingId, created: 0, updated: 0, removed: 0, skipped: [], ...counts });
+// One applied write; an { error } result becomes a skipped item.
+const outcome = (kind, todo, result) => ({ kind, title: todo.title, folder: todo.folder, result });
+
+// The latest open facilitator's last `### 칠판` list -> create / update / soft delete. force = plan again even
+// for a reply already handled (회의 끝). A reply without a list changes nothing, so it never clears the 칠판.
+export const syncMeetingBoard = (now = Date.now(), { force = false } = {}) => {
+    const [latest] = facilitators(now);
+    if (!latest || latest.view.status === 'archived') return synced(null);
+    const id = latest.meetingId;
+    const message = latest.view.lastMessage || '';
+    const seen = hash(message);
+    if (!force && handled.get(id) === seen) return synced(id);
+    const items = boardItems(message);
+    if (!items.length) {
+        handled.set(id, seen);
+        return synced(id);
+    }
+    // Today's 칠판 (duplicates) plus this meeting's own, deleted ones too (a deleted one is not written again).
+    const todos = allViews(now).filter(v => v.meeting?.id === id || (!v.deletedAt && visibleToday(v, now)));
+    const plan = syncPlan({ meetingId: id, items, todos, folders: folders() });
+    const byId = new Map(todos.map(t => [t.id, t]));
+    const writes = [
+        ...plan.create.map(c => outcome('created', c, createTodo({ title: c.title, folder: c.folder, detail: c.detail }, now, { source: 'scrum', meeting: { id, key: c.key } }))),
+        ...plan.update.map(u => outcome('updated', byId.get(u.id), updateTodo(u.id, u.patch, now))),
+        ...plan.remove.map(tid => outcome('removed', byId.get(tid), deleteTodo(tid, now))),
+    ];
+    const done = kind => writes.filter(w => w.kind === kind && !w.result.error).length;
+    const skipped = [...plan.skipped, ...writes.filter(w => w.result.error).map(w => ({ title: w.title, folder: w.folder, reason: w.result.error }))];
+    // Remembered only once written: a throw above retries on the next tick (the keys keep that idempotent).
+    handled.set(id, seen);
+    Object.assign(lastSync, { meetingId: id, skipped, at: now });
+    return synced(id, { created: done('created'), updated: done('updated'), removed: done('removed'), skipped });
+};
+
+// 회의실 status line: live todos this meeting put on the 칠판, and what its last sync could not write.
+const boardState = latest => {
+    if (!latest) return { meetingId: null, count: 0, skipped: [] };
+    const id = latest.meetingId;
+    const count = Object.values(todosStore.load()).filter(t => !t.deletedAt && t.meeting?.id === id).length;
+    return { meetingId: id, count, skipped: lastSync.meetingId === id ? lastSync.skipped : [] };
+};
+
 export const getMeeting = (now = Date.now()) => {
     const date = localDate(now);
     const [latest] = facilitators(now);
@@ -77,6 +128,7 @@ export const getMeeting = (now = Date.now()) => {
         count: latest?.n ?? 0,
         // 업무일지 card (finishing design §2.1): today's AI 서술 and the in-server run, if any.
         narrative: { ...narrativeOf(notes.read(date), date), running: narrationState.running, startedAt: narrationState.startedAt, error: narrationState.error },
+        board: boardState(latest),
     };
 };
 
@@ -100,7 +152,7 @@ export const recentWork = (now = Date.now()) => {
 export const refreshNote = (now = Date.now()) => {
     const date = localDate(now);
     const since = startOfYesterday(now);
-    const sessions = recentWork(now).map(w => w.view);
+    const sessions = recentWork(now).map(w => ({ ...w.view, folder: w.folder }));
     const { todos, folders, history } = listTodos(now, { since });
     return notes.write(date, replaceAuto(notes.read(date), autoSection({ date, since, sessions, todos, folders, history }), date));
 };
@@ -114,9 +166,10 @@ export const startMeeting = (now = Date.now()) => {
     return { opened, note, id };
 };
 
-// Archives the latest facilitator (if still open) and appends `## 회의 n`. Without a facilitator the 칠판
-// alone is recorded.
+// Copies the facilitator's last list onto the 칠판, archives it (if still open) and appends `## 회의 n`.
+// Without a facilitator the 칠판 alone is recorded.
 export const endMeeting = (now = Date.now()) => {
+    syncMeetingBoard(now, { force: true });
     const date = localDate(now);
     const [latest] = facilitators(now);
     if (latest && latest.view.status !== 'archived') archive(latest.view);
@@ -127,4 +180,4 @@ export const endMeeting = (now = Date.now()) => {
 };
 
 // Called once at server start; a hand-edited guide of the same version is kept.
-export const installGuide = () => ensureGuide(facilitatorGuide({ cliPath: CLI_PATH }), GUIDE_HEADER);
+export const installGuide = () => ensureGuide(facilitatorGuide(), GUIDE_HEADER);

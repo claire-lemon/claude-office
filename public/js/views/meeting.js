@@ -36,6 +36,7 @@ const SHELL = `
     `<button type="button" role="tab" class="mt-tab" id="mt-tab-${id}" data-tab="${id}" aria-controls="mt-msg">${label}</button>`).join('')}</div>
   <div class="mt-msg" id="mt-msg" role="tabpanel"></div>
   <div class="mt-btns"></div>
+  <p class="mt-board hint" hidden></p>
   <p class="mt-hint hint" hidden></p>
   <button type="button" class="mt-note" data-act="copy-note" title="클릭해서 경로 복사"></button>`;
 
@@ -97,6 +98,17 @@ const hintHtml = m => {
   return `업무일지를 먼저 쓰면 진행자가 어제 흐름까지 보고 정리해요 · <button type="button" class="mt-link" data-act="narrate"${ui.busy ? ' disabled' : ''}>업무일지 쓰기</button>`;
 };
 
+// 진행자 tab, under the buttons (meeting-board-sync design §2.6): what the server copied from the facilitator's
+// `### 칠판` list, and the items it could not write.
+const boardHtml = m => {
+  const b = m?.board;
+  const skipped = b?.skipped || [];
+  return [
+    b?.count > 0 ? `칠판에 반영: ${b.count}개` : '',
+    skipped.length ? `<span class="mt-skip">폴더를 몰라 못 적은 항목: ${escapeHtml(skipped.map(s => s.title).join(', '))}</span>` : '',
+  ].filter(Boolean).join(' · ');
+};
+
 // Display only: the home folder as ~ (the copy keeps the full path).
 const tildePath = p => String(p).replace(/^\/(Users|home)\/[^/]+/, '~');
 const noteHtml = m => (m?.note?.path
@@ -132,6 +144,8 @@ const draw = () => {
   paint('stage', stageHtml(m, key));
   paint('msg', onNote ? narrativeHtml(m?.narrative) : msgHtml(m));
   paint('btns', onNote ? narrateBtnHtml(m?.narrative) : buttonsHtml(m));
+  paint('board', onNote ? '' : boardHtml(m));
+  refs.board.hidden = !painted.board;
   paint('hint', onNote ? '' : hintHtml(m));
   refs.hint.hidden = !painted.hint;
   paint('note', noteHtml(m));
@@ -232,6 +246,7 @@ export const mountMeeting = (el, { onChange = () => {} } = {}) => {
   refs.tabs = Array.from(el.querySelectorAll('[role="tab"]'));
   refs.msg = el.querySelector('.mt-msg');
   refs.btns = el.querySelector('.mt-btns');
+  refs.board = el.querySelector('.mt-board');
   refs.hint = el.querySelector('.mt-hint');
   refs.note = el.querySelector('.mt-note');
   el.addEventListener('click', onClick);

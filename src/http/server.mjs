@@ -2,9 +2,9 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PORT, PUBLIC_DIR, NARRATE_AUTO, NARRATE_EVERY } from '../config.mjs';
+import { PORT, PUBLIC_DIR, NARRATE_AUTO, NARRATE_EVERY, MEETING_SYNC_EVERY } from '../config.mjs';
 import { routes, send } from './routes.mjs';
-import { installGuide } from '../usecases/meeting.mjs';
+import { installGuide, syncMeetingBoard } from '../usecases/meeting.mjs';
 import { narrateOnTimer } from '../usecases/narrate.mjs';
 
 const ORIGINS = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`];
@@ -48,8 +48,19 @@ try {
 // Same lock as the 회의실 button: whichever comes second skips, and errors are logged there.
 const narrate = () => narrateOnTimer();
 
+// 회의실 → 칠판 (meeting-board-sync design §2.3): no open facilitator today (tests, a fresh office) = no-op, and
+// an unchanged reply is skipped inside. One stderr line per failure; the next tick tries again.
+const syncBoard = () => {
+    try {
+        syncMeetingBoard();
+    } catch (e) {
+        console.error(`meeting board sync failed: ${e.message}`);
+    }
+};
+
 server.listen(PORT, '127.0.0.1', () => {
     console.log(`office open: http://127.0.0.1:${PORT}`);
+    setInterval(syncBoard, MEETING_SYNC_EVERY);
     if (!NARRATE_AUTO) return;
     narrate();
     setInterval(narrate, NARRATE_EVERY);

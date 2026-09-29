@@ -88,6 +88,22 @@ test('autoSection: status labels, diff stat, 📋 link, 한 줄 요약 (report, 
     assert.deepEqual(Object.keys(STATUS_LABEL).sort(), ['archived', 'blocked', 'done', 'hold', 'question', 'review', 'stale', 'unknown', 'working']);
 });
 
+test('autoSection: 📁 folder name at the end of a session line (board and off-board sessions alike)', () => {
+    const auto = autoSection({
+        since: SINCE,
+        sessions: [
+            { title: '결제 리팩터링', status: 'review', folder: '/r/api-server', diffStat: { files: 3, add: 12, del: 4 }, todoTitle: '결제 모듈' },
+            { title: '예전 세션', status: 'stale', folder: '/r/knowledge/' },
+            { title: '폴더 모름', status: 'archived', folder: '' },
+        ],
+    }).split('\n');
+    assert.deepEqual(auto.slice(2, 5), [
+        '1. 결제 리팩터링 — 결재 대기 · +12 −4 · 3개 파일 · 📋 결제 모듈 · 📁 api-server',
+        '2. 예전 세션 — 지난 세션 · 📁 knowledge',
+        '3. 폴더 모름 — 보관',
+    ]);
+});
+
 test('autoSection: empty sessions / 칠판 / 할 일 기록 / folders read 없음', () => {
     const empty = [
         AUTO_START, '## 어제 세션 (2026-09-28 00:00 이후)', '1. 없음', '## 칠판 (지금)', '1. 없음', '## 할 일 기록 (2026-09-28 00:00 이후)', '1. 없음',

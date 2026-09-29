@@ -12,7 +12,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 // time, so this is set before the dynamic imports below.
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'office-meeting-'));
 process.env.OFFICE_HOME = HOME;
-const { CLI_PATH, OFFICE_DIR } = await import('../../src/config.mjs');
+const { OFFICE_DIR } = await import('../../src/config.mjs');
 const { meetingPrompt, facilitatorGuide, GUIDE_HEADER } = await import('../../src/domain/meeting.mjs');
 const { localDate, hhmm, noteSkeleton, AUTO_START, AUTO_END } = await import('../../src/domain/daily-note.mjs');
 
@@ -71,16 +71,16 @@ const post = async (p, body) => {
 };
 const qOf = opened => new URL(opened.replace('claude://', 'http://')).searchParams;
 
-test('server start writes the facilitator guide (version header, CLI path)', () => {
-    assert.equal(fs.readFileSync(GUIDE, 'utf8'), facilitatorGuide({ cliPath: CLI_PATH }));
+test('server start writes the facilitator guide (version header)', () => {
+    assert.equal(fs.readFileSync(GUIDE, 'utf8'), facilitatorGuide());
     assert.equal(fs.readFileSync(GUIDE, 'utf8').split('\n')[0], GUIDE_HEADER);
-    assert.equal(CLI_PATH, path.join(ROOT, 'bin/office.mjs'));
 });
 
 test('before any meeting: no session, no note', async () => {
     assert.deepEqual(await get('/api/meeting'), {
         date: TODAY, note: { path: NOTE, exists: false }, session: null, ended: false, count: 0,
         narrative: { exists: false, text: '', writtenAt: null, running: false, startedAt: null, error: null },
+        board: { meetingId: null, count: 0, skipped: [] },
     });
 });
 
@@ -98,7 +98,7 @@ test('start (dry run): note with the auto block, facilitator deep link with meet
     const text = note();
     assert.ok(text.startsWith(`${noteSkeleton(TODAY)}\n${AUTO_START}\n## 어제 세션 (`), text);
     assert.ok(text.trimEnd().endsWith(AUTO_END));
-    assert.match(text, /\n1\. W 세션 — 결재 대기\n {3}1\. 한 줄 요약: 결제 분리 완료\n {3}2\. 다음 작업 추천: 타입 배포\n/);
+    assert.match(text, /\n1\. W 세션 — 결재 대기 · 📁 api\n {3}1\. 한 줄 요약: 결제 분리 완료\n {3}2\. 다음 작업 추천: 타입 배포\n/);
     assert.ok(!text.includes('옛 세션'));
     assert.ok(text.includes('## 칠판 (지금)\n1. ☐ 회의 준비 — api\n'));
     // 할 일 기록 sits between the 칠판 and the folders; a todo written today is in it
@@ -169,7 +169,7 @@ test('guide on restart: an old version is rewritten, a same-version hand edit is
     await stop();
     fs.writeFileSync(GUIDE, '<!-- claude-office guide v0 -->\n옛 지침\n');
     await start();
-    assert.equal(fs.readFileSync(GUIDE, 'utf8'), facilitatorGuide({ cliPath: CLI_PATH }));
+    assert.equal(fs.readFileSync(GUIDE, 'utf8'), facilitatorGuide());
 
     await stop();
     const edited = `${GUIDE_HEADER}\n# 내가 고친 지침\n`;

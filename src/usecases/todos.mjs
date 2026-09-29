@@ -43,7 +43,7 @@ export const folders = () =>
         .map(f => ({ path: f.path, name: path.basename(f.path), lastAt: f.lastAt }));
 
 // Every todo as a view, deleted ones included (one linkIndex per call).
-const allViews = now => {
+export const allViews = now => {
     const index = links(now);
     return Object.entries(todosStore.load()).map(([id, todo]) => viewOf(id, todo, index, now));
 };
@@ -68,15 +68,20 @@ export const todoHistory = (now = Date.now()) => ({
         .sort((a, b) => (b.doneAt || b.deletedAt) - (a.doneAt || a.deletedAt)),
 });
 
-// Who wrote the todo: the 칠판 form (HTTP) or the 회의실 facilitator (CLI --source scrum).
+// Who wrote the todo: the 칠판 form (HTTP), the 회의실 sync or the CLI (--source scrum).
 const SOURCES = ['manual', 'scrum'];
+// meeting = { id, key }: the 회의실 sync's own (meeting-board-sync design §2.2), found again by key.
+const isMeetingRef = m => typeof m?.id === 'string' && typeof m?.key === 'string';
 
-export const createTodo = (raw, now = Date.now(), { source = 'manual' } = {}) => {
+export const createTodo = (raw, now = Date.now(), { source = 'manual', meeting } = {}) => {
     const result = normalizeTodoPatch(raw, { create: true });
     if (!result.ok) return { error: result.error };
     if (!isDir(result.patch.folder)) return { error: 'folder not found' };
     const id = newId(todosStore.load());
-    const todo = { detail: '', ...result.patch, createdAt: now, source: SOURCES.includes(source) ? source : 'manual', manual: null, deletedAt: null };
+    const todo = {
+        detail: '', ...result.patch, createdAt: now, source: SOURCES.includes(source) ? source : 'manual', manual: null, deletedAt: null,
+        ...(isMeetingRef(meeting) ? { meeting: { id: meeting.id, key: meeting.key } } : {}),
+    };
     todosStore.save(id, todo);
     return { todo: toTodoView({ id, todo, sessions: [], now }) };
 };

@@ -62,7 +62,7 @@ flowchart TB
 server.mjs              entry (runs src/http/server.mjs)
 install.mjs             install / uninstall hooks
 hooks/report.mjs        the hook (standalone, no imports, for startup speed)
-bin/office.mjs          blackboard CLI (used by the meeting facilitator and by you; no server needed)
+bin/office.mjs          blackboard CLI (for you; no server needed)
 src/
   config.mjs            env vars, paths, limits (the only place env vars are read)
   http/                 controller: normalize input → call a use case → respond; Host/Origin checks
@@ -153,8 +153,14 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
 **🏫 회의실** in the header switches the screen to the meeting room: the todo blackboard on the left, the facilitator's seat on the right. It is where yesterday gets summarized and today's todos get brainstormed.
 
 1. **회의 시작** (start): the server writes today's note, `~/.claude/office/daily/YYYY-MM-DD.md` (sessions active since yesterday 00:00 with status, one-line summary and next-task suggestions; the blackboard as it is; a todo history since yesterday 00:00 with every session each todo went through, done and deleted ones included; recent project folders), then opens a new-session input for the facilitator (just press Enter).
-2. **The facilitator is a real Claude Code session.** It first reads the guide file named in its prompt, `~/.claude/office/CLAUDE.md` (managed by the server), and follows it (the app may open the session in a scratch workspace, so the guide is not left to the folder's CLAUDE.md). It reads only today's note and what you say; no repo or vault digging, no code edits, no git. Its first message lists "finished yesterday / not finished / suggested for today", and the conversation happens in the app's chat.
-3. Agreed items are written by the facilitator through the **blackboard CLI** (you can use it too):
+2. **The facilitator is a real Claude Code session.** It first reads the guide file named in its prompt, `~/.claude/office/CLAUDE.md` (managed by the server), and follows it (the app may open the session in a scratch workspace, so the guide is not left to the folder's CLAUDE.md). It reads only today's note and what you say; no repo or vault digging, no file writes, no commands (Bash), no git. Its first message lists "finished yesterday / not finished / suggested for today", and the conversation happens in the app's chat.
+3. **The blackboard follows the meeting**: every facilitator reply ends with a `### 칠판` list (`1. title — folder name`, sub-items as the detail, at most 7), and every 3 seconds the server copies the facilitator's latest reply onto the blackboard. Even if you never answer, the first reply fills it.
+   1. New items are created; items this meeting created get their detail/folder updated when those change (the title is left alone).
+   2. A todo with the same title (ignoring spacing and case) already on the blackboard is not created again.
+   3. An item dropped from the list is removed only while it is not started and untouched (no manual check, no assignment). A todo you delete on the blackboard is not recreated even if the list still has it.
+   4. Folder names come from the note's `## 최근 프로젝트 폴더` (the `📁 name` on yesterday's session lines). An unknown or ambiguous name is not created; the meeting room lists it as "폴더를 몰라 못 적은 항목", next to "칠판에 반영: N개" on the facilitator tab.
+
+   The blackboard CLI stays for you (no server needed):
    ```bash
    node bin/office.mjs todo list
    node bin/office.mjs todo add "title" --folder /abs/path [--detail "…"] [--source scrum]
@@ -164,10 +170,9 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
    node bin/office.mjs narrate      # rewrite today's AI narrative now
    ```
    Items added in a meeting carry a 🏫 mark on the blackboard. The meeting screen refreshes the facilitator's latest message and the blackboard every 2 seconds.
-4. **회의 끝** (end): archives the facilitator session and appends a `## 회의 n` section (the agreed todos, the facilitator's last message) to the note. You can hold several meetings a day. Only the note's auto block (`<!-- office:auto:start -->` … `end -->`) is regenerated at each start; everything else is kept.
+4. **회의 끝** (end): copies the facilitator's latest list onto the blackboard once more, archives the facilitator session and appends a `## 회의 n` section (the agreed todos, the facilitator's last message) to the note. You can hold several meetings a day. Only the note's auto block (`<!-- office:auto:start -->` … `end -->`) is regenerated at each start; everything else is kept.
 5. **📓 업무일지 tab** (work log): a tab above the facilitator's seat shows today's AI narrative. **지금 쓰기** (write now) when there is none, **다시 쓰기** (rewrite) when there is (1–2 minutes; it runs in the background on the server while the screen shows progress). The facilitator tab also offers a button when the log is missing, since the facilitator then sees yesterday's flow too.
 6. **AI narrative**: while the server runs, once a day after 05:00 a model (`claude -p`, haiku) tells yesterday's sessions as a story per project plus a "남은 것" (still open) list, and puts it in a `## 어제 이야기` block (`<!-- office:narrative:start -->` … `end -->`) right after the auto block. The server checks at start and every 10 minutes and skips a note that already has one. To rewrite it: `node bin/office.mjs narrate`. The facilitator reads the note, so it sees the narrative too.
-6. The app may ask for Bash permission each time the facilitator runs the CLI. To stop that, allow just that command in `~/.claude/office/.claude/settings.json` (this app never writes it).
 
 ## Detail panel
 

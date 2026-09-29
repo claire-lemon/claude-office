@@ -1,6 +1,7 @@
 // Pure 오늘 일지 builders (meeting-room design §4): the server-owned auto block, the 회의 n section, and
 // splicing them into a note without touching anything outside the markers. `now`-like values come in as
 // arguments; dates are the server's local time.
+import path from 'node:path';
 import { oneLineSummary } from './report.mjs';
 
 export const STATUS_LABEL = {
@@ -49,10 +50,13 @@ const orNone = lines => (lines.length ? lines : ['없음']);
 
 export const noteSkeleton = date => `---\ndate: "${date}"\ntype: office-daily\n---\n# ${date}\n`;
 
-// session: { title, status, diffStat?, todoTitle?, report?, preview?, nextTasks? } (off-board ones: title/status only).
+// session: { title, status, folder?, diffStat?, todoTitle?, report?, preview?, nextTasks? } (off-board ones: title/
+// status/folder only). 📁 = the project folder's name, what the facilitator picks a todo's folder by.
 const sessionHead = s => {
     const stat = s.diffStat && `+${s.diffStat.add} −${s.diffStat.del} · ${s.diffStat.files}개 파일`;
-    return [`${s.title} — ${STATUS_LABEL[s.status] ?? s.status}`, stat, s.todoTitle && `📋 ${s.todoTitle}`].filter(Boolean).join(' · ');
+    return [`${s.title} — ${STATUS_LABEL[s.status] ?? s.status}`, stat, s.todoTitle && `📋 ${s.todoTitle}`, s.folder && `📁 ${path.basename(s.folder)}`]
+        .filter(Boolean)
+        .join(' · ');
 };
 const sessionSubs = s => {
     const summary = oneLineSummary({ report: s.report }) || oneLine(s.preview, 120);
