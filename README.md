@@ -62,7 +62,7 @@ flowchart TB
 
 ```
 server.mjs              진입점 (src/http/server.mjs 실행)
-install.mjs             hooks 설치·제거
+install.mjs             hooks·진행자 읽기 허용 규칙 설치·제거
 hooks/report.mjs        hook (실행 속도 때문에 의존성 없이 단독)
 bin/office.mjs          칠판 CLI (사람용, 서버 불필요)
 src/
@@ -87,7 +87,7 @@ test/integration/       서버·fixture·임시 git 레포 테스트
 - 규칙은 표로 둔다. 새 칸·드래그 규칙·필터·버튼·편집 필드는 표에 한 줄을 더하면 된다(고칠 곳: [설계 §4](docs/specs/2026-09-28-board-interactions-design.md#4-확장-지점-나중에-기능을-붙이는-곳)).
 - 세션이 어느 칸에 있고 어디로 옮길 수 있는지는 서버(`src/domain/board.mjs`)가 계산해 `column`, `moves`로 내려준다. 화면은 그대로 보여주기만 한다.
 - 파일 쓰기와 OS 명령은 `sources/`와 `platform/`에만 있다.
-- 설계 문서: [레이어·상세 패널](docs/specs/2026-09-28-layering-and-panel-design.md), [결재함 상호작용](docs/specs/2026-09-28-board-interactions-design.md), [오늘의 할 일 칠판](docs/specs/2026-09-28-todo-blackboard-design.md), [회의실](docs/specs/2026-09-29-meeting-room-design.md), [AI 서술](docs/specs/2026-09-29-daily-narrative-design.md), [연결 기록](docs/specs/2026-09-29-todo-history-design.md), [마무리](docs/specs/2026-09-29-finishing-touches-design.md), [이벤트 이력](docs/specs/2026-09-29-event-history-design.md), 제품 리뷰: [`docs/product-review-20260929.md`](docs/product-review-20260929.md)
+- 설계 문서: [레이어·상세 패널](docs/specs/2026-09-28-layering-and-panel-design.md), [결재함 상호작용](docs/specs/2026-09-28-board-interactions-design.md), [오늘의 할 일 칠판](docs/specs/2026-09-28-todo-blackboard-design.md), [회의실](docs/specs/2026-09-29-meeting-room-design.md), [AI 서술](docs/specs/2026-09-29-daily-narrative-design.md), [연결 기록](docs/specs/2026-09-29-todo-history-design.md), [마무리](docs/specs/2026-09-29-finishing-touches-design.md), [이벤트 이력](docs/specs/2026-09-29-event-history-design.md), [진행자 읽기 허용](docs/specs/2026-09-29-facilitator-permissions-design.md), 제품 리뷰: [`docs/product-review-20260929.md`](docs/product-review-20260929.md)
 
 ## 먼저 데모로 보기 (실제 설정 안 건드림)
 
@@ -99,7 +99,7 @@ node scripts/demo.mjs public 7770
 
 ## 실제로 쓰기
 
-1. hooks 설치 (`~/.claude/settings.json` 백업 후 `UserPromptSubmit` / `Notification` / `Stop` 추가)
+1. hooks 설치 (`~/.claude/settings.json` 백업 후 `UserPromptSubmit` / `Notification` / `Stop` hooks와 회의 진행자 읽기 허용 규칙 2줄 추가)
    ```bash
    node install.mjs
    ```
@@ -111,6 +111,8 @@ node scripts/demo.mjs public 7770
 4. 앱에서 새 세션에 작업 지시 → 사원이 타이핑 → 끝나면 "보고드려요" → 카드 클릭 → 보고서/변경사항 확인 → 채팅방 열기 또는 컨펌.
 
 특정 세션 패널을 바로 여는 주소: `http://127.0.0.1:7777/?open=<세션 id>` (변경사항 탭은 `&tab=diff`).
+
+읽기 허용 규칙은 `~/.claude/office/CLAUDE.md`(진행자 지침)와 `~/.claude/office/daily/**`(일지) 두 곳의 `Read`만 연다. 진행자 세션은 워크트리·임시 작업 공간에서 열려 이 파일들이 작업 폴더 밖이라, 규칙이 없으면 회의마다 허용 클릭이 뜬다([설계](docs/specs/2026-09-29-facilitator-permissions-design.md)). 이전에 설치했다면 원래 체크아웃에서 `node install.mjs`를 한 번 더 실행한다(워크트리에서 실행하면 hooks 경로가 그 워크트리로 바뀐다).
 
 hooks는 설치 **이후** 시작된 턴부터 잡힌다. 설치 전 세션은 24시간 이내 활동분만 회색(상태 미상)으로 보인다. 앱 세션은 있는데 hook 기록이 하나도 없으면 헤더 아래에 `node install.mjs` 안내가 뜨고, 세션이 하나도 없으면 3단계 설치 안내가 뜬다.
 
@@ -207,7 +209,7 @@ hooks는 설치 **이후** 시작된 턴부터 잡힌다. 설치 전 세션은 2
 node install.mjs --uninstall
 ```
 
-그리고 `~/.claude/CLAUDE.md`의 결재 보고 블록 삭제, `rm -rf ~/.claude/office`(결정·이름·할 일·연결 기록·일지·진행자 지침·이벤트 이력 포함). 이벤트 이력만 지우려면 `rm -rf ~/.claude/office/events`(대기 시간이 마지막 이벤트 기준으로, 지난 턴 표시가 빈칸으로 돌아갈 뿐이다). 앱 데이터와 세션은 읽기만 하므로 영향 없음.
+hooks와 진행자 읽기 허용 규칙만 빠진다. 그리고 `~/.claude/CLAUDE.md`의 결재 보고 블록 삭제, `rm -rf ~/.claude/office`(결정·이름·할 일·연결 기록·일지·진행자 지침·이벤트 이력 포함). 이벤트 이력만 지우려면 `rm -rf ~/.claude/office/events`(대기 시간이 마지막 이벤트 기준으로, 지난 턴 표시가 빈칸으로 돌아갈 뿐이다). 앱 데이터와 세션은 읽기만 하므로 영향 없음.
 
 ## 검증
 
