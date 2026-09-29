@@ -78,7 +78,7 @@ test('server start writes the facilitator guide (version header)', () => {
 
 test('before any meeting: no session, no note', async () => {
     assert.deepEqual(await get('/api/meeting'), {
-        date: TODAY, note: { path: NOTE, exists: false }, session: null, ended: false, count: 0,
+        date: TODAY, note: { path: NOTE, display: `~/.claude/office/daily/${TODAY}.md`, exists: false }, session: null, ended: false, count: 0,
         narrative: { exists: false, text: '', writtenAt: null, running: false, startedAt: null, error: null },
         board: { meetingId: null, count: 0, skipped: [] },
     });

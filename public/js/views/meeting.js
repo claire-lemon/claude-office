@@ -114,10 +114,11 @@ const boardHtml = m => {
   ].filter(Boolean).join(' · ');
 };
 
-// Display only: the home folder as ~ (the copy keeps the full path).
+// The server's display path (its home as ~, OFFICE_HOME in the demo too); a server from before
+// note.display gets the old guess at /Users/<name>. The copy keeps the full path.
 const tildePath = p => String(p).replace(/^\/(Users|home)\/[^/]+/, '~');
 const noteHtml = m => (m?.note?.path
-  ? `일지: <code>${escapeHtml(tildePath(m.note.path))}</code>${m.note.exists ? '' : ' (회의 시작 때 만들어요)'}`
+  ? `일지: <code>${escapeHtml(m.note.display || tildePath(m.note.path))}</code>${m.note.exists ? '' : ' (회의 시작 때 만들어요)'}`
   : '');
 
 const subText = (m, todos) => {

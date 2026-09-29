@@ -9,7 +9,7 @@ export const ANIMALS = ['cat', 'dog', 'rabbit', 'bear', 'penguin', 'fox', 'hamst
 export const hash = (s = '') => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 // `home` is passed in (not read from config) so this module stays a pure function of its arguments.
-const tilde = (p, home) => (p && (p === home || p.startsWith(`${home}/`)) ? `~${p.slice(home.length)}` : p);
+export const tilde = (p, home) => (p && (p === home || p.startsWith(`${home}/`)) ? `~${p.slice(home.length)}` : p);
 
 // The app's own per-turn summary (local_*.json postTurnSummary: status_category/status_detail/needs_action).
 // Internal app format: anything unexpected -> null.

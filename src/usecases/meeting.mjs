@@ -11,7 +11,7 @@ import * as notes from '../sources/daily-notes.mjs';
 import { ensureGuide } from '../sources/office-guide.mjs';
 import { firstPromptHead, lastAssistantText } from '../sources/transcripts.mjs';
 import { columnOf } from '../domain/board.mjs';
-import { ANIMALS, hash } from '../domain/session-view.mjs';
+import { ANIMALS, hash, tilde } from '../domain/session-view.mjs';
 import { meetingIdIn, meetingId, meetingPrompt, facilitatorGuide, GUIDE_HEADER, boardItems, syncPlan } from '../domain/meeting.mjs';
 import { visibleToday, isProjectFolder } from '../domain/todo.mjs';
 import { autoSection, replaceAuto, meetingSection, appendSection, localDate, startOfYesterday, narrativeOf } from '../domain/daily-note.mjs';
@@ -131,7 +131,7 @@ export const getMeeting = (now = Date.now()) => {
     const file = notes.pathFor(date);
     return {
         date,
-        note: { path: file, exists: fs.existsSync(file) },
+        note: { path: file, display: tilde(file, HOME), exists: fs.existsSync(file) }, // display: the office's home as ~
         session: latest?.view ?? null,
         // Archived = the lean status; an archived session is never on the board.
         ended: latest?.view.status === 'archived',
