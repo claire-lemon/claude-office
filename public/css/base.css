@@ -59,7 +59,7 @@
   @media (max-width:640px){
     .topbar{flex-wrap:wrap; row-gap:8px;}
     .topbar h1{order:1; font-size:16px;}
-    .freshness{order:1;}
+    .freshness{order:4;}
     #sound-toggle,#legend-open{order:2;}
     .counters{order:3; flex-basis:100%; margin-left:0;}
   }
