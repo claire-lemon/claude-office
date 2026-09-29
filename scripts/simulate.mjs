@@ -110,6 +110,8 @@ const sessions = TITLES.map((title, i) => {
             worktreePath: i === 0 ? repo : null, sourceBranch: 'main', branch: `feat/s${i}`,
             prs: i === 0 ? [{ number: 490, state: 'OPEN', url: 'https://github.com/x/y/pull/490' }] : [],
             completedTurns: 3 + i, lastActivityAt: Date.now(), isArchived: false,
+            // The app's own turn summary: odd desks have one, so a 보고 없음 card shows 앱 요약 in its panel.
+            ...(i % 2 ? { postTurnSummary: { status_category: 'blocked', status_detail: `${title}: 브랜치 기준을 정하지 못해 멈춤`, needs_action: 'main / develop 중 기준 브랜치 답변 필요', summarizes_uuid: 'demo' } } : {}),
         }),
     );
     return { cli, cwd, transcript };

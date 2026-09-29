@@ -11,6 +11,13 @@ export const hash = (s = '') => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0
 // `home` is passed in (not read from config) so this module stays a pure function of its arguments.
 const tilde = (p, home) => (p && (p === home || p.startsWith(`${home}/`)) ? `~${p.slice(home.length)}` : p);
 
+// The app's own per-turn summary (local_*.json postTurnSummary: status_category/status_detail/needs_action).
+// Internal app format: anything unexpected -> null.
+export const toAppSummary = p =>
+    p && typeof p.status_detail === 'string' && p.status_detail.trim()
+        ? { category: String(p.status_category || ''), detail: p.status_detail, needsAction: String(p.needs_action || '') }
+        : null;
+
 // `override` = dashboard-only edits (title); `baseStatus` = status without the lead decision (for undo moves).
 export const toSessionView = ({ cli, state, app, lastAt, cwd, transcript, lastText, report, id, summary, status, baseStatus, gi, diffStat, home, override }) => {
     const appTitle = app?.title || path.basename(cwd) || cli.slice(0, 8);
@@ -42,6 +49,7 @@ export const toSessionView = ({ cli, state, app, lastAt, cwd, transcript, lastTe
         transcript,
         report,
         summary,
+        appSummary: toAppSummary(app?.postTurnSummary),
         diffStat,
         preview: report ? null : lastText.slice(0, 300),
         lastMessage: lastText.slice(0, 20000),

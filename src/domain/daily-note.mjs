@@ -5,7 +5,7 @@ import path from 'node:path';
 import { oneLineSummary } from './report.mjs';
 
 export const STATUS_LABEL = {
-    working: '작업 중', review: '결재 대기', question: '질문 중', blocked: '막힘', hold: '보류',
+    working: '작업 중', review: '결재 대기', question: '보고 없음', blocked: '막힘', hold: '보류',
     done: '완료', archived: '보관', stale: '지난 세션', unknown: '상태 미상',
 };
 // Copy of public/js/views/sprites.js ANIMAL_LABELS (browser module, not importable here).

@@ -28,15 +28,30 @@ const sectionHtml = (session, heading, body) => {
   return `<section class="report-sec"><h4>${escapeHtml(heading)}</h4>${html ?? renderMarkdown(body)}</section>`;
 };
 
+// Claude 앱이 턴마다 만드는 요약 (session.appSummary, from postTurnSummary): no model call of our own.
+const appSummaryHtml = ({ detail, needsAction }) => `<section class="report-sec"><h4>앱 요약</h4>${renderMarkdown(detail)}${needsAction ? `<h4>필요한 조치</h4>${renderMarkdown(needsAction)}` : ''}<p class="hint">결재 보고 블록이 없어 Claude 앱이 만든 턴 요약을 보여줘요.</p></section>`;
+
+// What the 보고서 tab shows, first one present: report -> 요약 만들기 result -> the app's turn summary ->
+// the whole last reply. Pure (unit-tested); one row per source.
+const REPORT_SOURCES = [
+  ['report', s => s.report],
+  ['summary', s => s.summary],
+  ['appSummary', s => s.appSummary],
+  ['lastMessage', s => s.lastMessage],
+];
+export const reportSource = session => REPORT_SOURCES.find(([, has]) => has(session))?.[0] ?? null;
+
+const PANE_HTML = {
+  report: s => Object.entries(s.report).map(([heading, body]) => sectionHtml(s, heading, body)).join('') + fullMessage(s),
+  summary: s => `<section class="report-sec">${renderMarkdown(s.summary)}</section>${fullMessage(s)}`,
+  appSummary: s => appSummaryHtml(s.appSummary) + fullMessage(s),
+  lastMessage: s => `<section class="report-sec">${renderMarkdown(s.lastMessage)}<p class="hint">결재 보고 블록이 없어 마지막 응답 전체를 보여줘요. 정리가 필요하면 '요약 만들기'를 눌러보세요.</p></section>`,
+};
+
 export const renderReportPane = session => {
   const pane = $('#pane-report');
-  const html = session.report
-    ? Object.entries(session.report).map(([heading, body]) => sectionHtml(session, heading, body)).join('') + fullMessage(session)
-    : session.summary
-      ? `<section class="report-sec">${renderMarkdown(session.summary)}</section>${fullMessage(session)}`
-      : session.lastMessage
-        ? `<section class="report-sec">${renderMarkdown(session.lastMessage)}<p class="hint">결재 보고 블록이 없어 마지막 응답 전체를 보여줘요. 정리가 필요하면 '요약 만들기'를 눌러보세요.</p></section>`
-        : '<p class="hint">표시할 내용이 없어요.</p>';
+  const source = reportSource(session);
+  const html = source ? PANE_HTML[source](session) : '<p class="hint">표시할 내용이 없어요.</p>';
   // Polling re-renders every 2s: skip identical HTML so scroll and open <details> survive.
   if (pane.dataset.html === html) return;
   const wasOpen = pane.querySelector('details.full-msg')?.open;

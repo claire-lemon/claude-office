@@ -3,7 +3,7 @@
 // MOVE_* tables. Which column a session is in and where it may go come from the server
 // (session.column / session.moves, src/domain/board.mjs); a new column is one row there and one here.
 
-// 결재 대기 order: blocked first (it stalls a session), then reports, then questions.
+// 결재 대기 order: blocked first (it stalls a session), then reports, then 보고 없음 (status 'question').
 const PENDING_ORDER = ['blocked', 'review', 'question'];
 const pendingRank = s => {
   const i = PENDING_ORDER.indexOf(s.status);

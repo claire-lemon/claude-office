@@ -53,7 +53,7 @@ const metaLine = s => {
   if (s.status === 'review') return `리뷰 필요 ${countReviewItems(s.report)}건`;
   if (s.status === 'blocked') return s.message ? String(s.message).slice(0,60) : '확인이 필요해요';
   if (s.status === 'working') return s.eventAt ? `${elapsed(Date.now()-s.eventAt)} 경과` : '진행 중';
-  if (s.status === 'question') return s.preview ? String(s.preview).slice(0,40) : '질문이 있어요';
+  if (s.status === 'question') return s.appSummary?.detail ? String(s.appSummary.detail).slice(0,40) : s.preview ? String(s.preview).slice(0,40) : '결재 보고 없이 끝났어요';
   if (s.status === 'done') return `턴 ${s.turns ?? '-'} · 완료`;
   if (s.status === 'hold') return s.eventAt ? `${elapsed(Date.now()-s.eventAt)} 전 마지막 활동` : '보류 중';
   return '';
@@ -77,7 +77,7 @@ const updateCard = (card, session) => {
   card.querySelector('.kan-title').textContent = session.title || '(제목 없음)';
   const tag = card.querySelector('.kan-tag');
   const tagText = session.status === 'review' ? ((session.nextTasks || []).length ? '다음 작업' : '보고서')
-    : session.status === 'question' ? '질문' : session.status === 'blocked' ? '막힘' : '';
+    : session.status === 'question' ? '보고 없음' : session.status === 'blocked' ? '막힘' : '';
   tag.textContent = tagText;
   tag.classList.toggle('tag-danger', session.status === 'blocked');
   tag.classList.toggle('hidden', !tagText);
