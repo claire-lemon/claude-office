@@ -66,7 +66,7 @@ bin/office.mjs          blackboard CLI (used by the meeting facilitator and by y
 src/
   config.mjs            env vars, paths, limits (the only place env vars are read)
   http/                 controller: normalize input → call a use case → respond; Host/Origin checks
-  usecases/             flows: session list, changes, confirm/hold/archive, next task, summary, todo ↔ session links, meetings
+  usecases/             flows: session list, changes, confirm/hold/archive, next task, summary, todo ↔ session links and assignment, meetings, AI narrative, prompt refine
   domain/               pure functions: status, report parsing, prompts, diff parsing, todo rules, daily note, facilitator guide
   sources/              data in/out: app session files, hook state, transcripts, decisions, git
   platform/             OS side effects: open, pbcopy, claude -p
@@ -85,7 +85,7 @@ test/integration/       server, fixtures, temp git repos
 - Rules live in tables. A new column, drop rule, filter, button, or editable field is one more row (where: [design §4](docs/specs/2026-09-28-board-interactions-design.md#4-확장-지점-나중에-기능을-붙이는-곳), Korean).
 - The server (`src/domain/board.mjs`) decides which column a session is in and where it may be dropped, and sends that as `column` and `moves`. The page only displays it.
 - File writes and OS commands live only in `sources/` and `platform/`.
-- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md), [meeting room](docs/specs/2026-09-29-meeting-room-design.md)
+- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md), [meeting room](docs/specs/2026-09-29-meeting-room-design.md), [AI narrative](docs/specs/2026-09-29-daily-narrative-design.md), [link history](docs/specs/2026-09-29-todo-history-design.md), [finishing touches](docs/specs/2026-09-29-finishing-touches-design.md)
 
 ## Try the demo first (touches no real settings)
 
@@ -143,8 +143,10 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
    | confirmed · archived | done (struck through for the rest of the day, hidden after midnight) |
    | manual check / uncheck | whichever is newer, the check or the session decision, wins |
 
-5. Deleting can be undone for 5 seconds; the board folds (▾) and its width is draggable.
-6. Todos are stored in `~/.claude/office/todos.json`. Links and status are derived from transcripts on every read, and every link seen once is also snapshotted in `links.json`: Claude Code deletes transcripts after 30 days, and the snapshot keeps a todo's session history and done state after that (while a transcript exists, it always wins).
+5. **✨ 다듬기** (refine): open an item's notes and press ✨ 다듬기. A model (`claude -p`, haiku, isolated call) reads the title, notes, linked sessions and today's narrative, and proposes a work order shaped as `목표 / 할 일 / 완료 기준 / 주의` (goal / steps / done when / cautions). Nothing is saved until you press **적용** (apply); the next **Start** then puts those notes into the prompt. Facts missing from the input come back as "확인 필요" (to check).
+6. **Assigning sessions**: sessions you started straight from the app can join a todo too. Drag a board card onto a blackboard item, or pick the todo in the session panel's "📋 할 일에 배정…" menu. Undo it with **해제** in the panel or the **×** in the item's +n history. A session belongs to one todo only (assigning it elsewhere moves it), and a session started with the blackboard's **Start** can't be moved. Confirming or archiving an assigned session completes the todo as well.
+7. Deleting can be undone for 5 seconds; the board folds (▾) and its width is draggable.
+8. Todos (assignments included) are stored in `~/.claude/office/todos.json`. Links and status are derived from transcripts and assignments on every read, and every link seen once is also snapshotted in `links.json`: Claude Code deletes transcripts after 30 days, and the snapshot keeps a todo's session history and done state after that (while a transcript exists, it always wins).
 
 ## Meeting room (daily scrum)
 
@@ -163,7 +165,8 @@ A chalkboard on the office's left wall holds today's todos. Each item has a **�
    ```
    Items added in a meeting carry a 🏫 mark on the blackboard. The meeting screen refreshes the facilitator's latest message and the blackboard every 2 seconds.
 4. **회의 끝** (end): archives the facilitator session and appends a `## 회의 n` section (the agreed todos, the facilitator's last message) to the note. You can hold several meetings a day. Only the note's auto block (`<!-- office:auto:start -->` … `end -->`) is regenerated at each start; everything else is kept.
-5. **AI narrative**: while the server runs, once a day after 05:00 a model (`claude -p`, haiku) tells yesterday's sessions as a story per project plus a "남은 것" (still open) list, and puts it in a `## 어제 이야기` block (`<!-- office:narrative:start -->` … `end -->`) right after the auto block. The server checks at start and every 10 minutes and skips a note that already has one. To rewrite it: `node bin/office.mjs narrate`. The facilitator reads the note, so it sees the narrative too.
+5. **📓 업무일지 tab** (work log): a tab above the facilitator's seat shows today's AI narrative. **지금 쓰기** (write now) when there is none, **다시 쓰기** (rewrite) when there is (1–2 minutes; it runs in the background on the server while the screen shows progress). The facilitator tab also offers a button when the log is missing, since the facilitator then sees yesterday's flow too.
+6. **AI narrative**: while the server runs, once a day after 05:00 a model (`claude -p`, haiku) tells yesterday's sessions as a story per project plus a "남은 것" (still open) list, and puts it in a `## 어제 이야기` block (`<!-- office:narrative:start -->` … `end -->`) right after the auto block. The server checks at start and every 10 minutes and skips a note that already has one. To rewrite it: `node bin/office.mjs narrate`. The facilitator reads the note, so it sees the narrative too.
 6. The app may ask for Bash permission each time the facilitator runs the CLI. To stop that, allow just that command in `~/.claude/office/.claude/settings.json` (this app never writes it).
 
 ## Detail panel
