@@ -129,14 +129,17 @@ const todayPrefix = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-`;
 };
+// busy: the facilitator is working on a reply (정리 중), the lamp blinks fast; otherwise it glows slowly.
 export const updateDoor = list => {
   const door = $('.office-decor .door');
+  if (!door) return;
   const prefix = todayPrefix();
-  const on = list.some(s => s.meetingId?.startsWith(prefix));
-  if (!door || door.classList.contains('on') === on) return;
-  door.classList.toggle('on', on);
-  door.querySelector('.door-sign').textContent = on ? '회의 중' : '회의실';
-  door.title = on ? '회의 중 · 들어가기' : '회의실 들어가기';
+  const hosts = list.filter(s => s.meetingId?.startsWith(prefix));
+  const busy = hosts.some(s => s.status === 'working');
+  door.classList.toggle('on', hosts.length > 0);
+  door.classList.toggle('busy', busy);
+  door.querySelector('.door-sign').textContent = hosts.length ? '회의 중' : '회의실';
+  door.title = busy ? '회의 중 · 진행자가 정리하는 중 · 들어가기' : hosts.length ? '회의 중 · 들어가기' : '회의실 들어가기';
 };
 
 export const updateWindow = () => {

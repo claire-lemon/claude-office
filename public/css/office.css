@@ -33,7 +33,9 @@
   .door.on .door-leaf{transform:scaleX(.88);}
   .door.on:hover .door-leaf,.door.on:focus-visible .door-leaf{transform:scaleX(.6);}
   .door.on .door-sign{background:var(--accent); border-color:var(--accent); color:#4a3b2f;}
+  .door.on.busy .door-lamp{animation:lamp-blink .5s steps(1) infinite;} /* 정리 중 */
   @keyframes lamp-glow{0%,100%{filter:drop-shadow(0 0 1px #ff7a7a)} 50%{filter:drop-shadow(0 0 4px #ff7a7a)}}
+  @keyframes lamp-blink{0%{fill:#ff7a7a; filter:drop-shadow(0 0 4px #ff7a7a)} 50%{fill:var(--line); filter:none}}
   .door:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px;}
   .door-sign{font-size:11px; font-weight:600; line-height:16px; padding:0 6px; background:var(--bg); border:1px solid var(--line); border-radius:6px; white-space:nowrap;}
 
