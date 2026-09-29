@@ -47,7 +47,7 @@
 | 값 | 계산 | 이력이 없거나 안 맞을 때 |
 |---|---|---|
 | `pendingSince` | 결재 대기(`column === 'pending'`)일 때만. 이력 끝에서부터 현재 이벤트와 **같은 이벤트가 이어지는 구간**의 첫 `at` | 마지막 줄의 `at`이 `state.at`과 다르면(이력 누락) `state.at` |
-| `turnMs` | 마지막 `Stop`의 `at` − 그 앞 `Stop` 이후 첫 `UserPromptSubmit`의 `at` | 해당 쌍이 없으면 `null` |
+| `turnMs` | 마지막 `Stop`의 `at` − 그 `Stop`을 부른 프롬프트 묶음(앞 `Stop` 이후의 `UserPromptSubmit`들) 중 첫 `at`. 프롬프트 없이 이어진 `Stop`(Stop hook이 턴을 계속함)은 같은 턴으로 본다 | 마지막 `Stop` 앞에 프롬프트가 없으면 `null` |
 
 화면:
 

@@ -49,6 +49,13 @@ const diffStatHtml = session => {
   return `<span class="ds-add">+${add}</span> <span class="ds-del">−${del}</span> · ${files}개 파일${warn}`;
 };
 
+// 결재 대기 cards: how long the lead has kept this one waiting (session.pendingSince).
+const waitText = s => {
+  if (s.column !== 'pending' || !s.pendingSince) return '';
+  const e = elapsed(Date.now() - s.pendingSince);
+  return e === '방금' ? ' · 방금 도착' : ` · ${e}째 대기`;
+};
+
 const metaLine = s => {
   if (s.status === 'review') return `리뷰 필요 ${countReviewItems(s.report)}건`;
   if (s.status === 'blocked') return s.message ? String(s.message).slice(0,60) : '확인이 필요해요';
@@ -95,7 +102,7 @@ const updateCard = (card, session) => {
   const cwdEl = card.querySelector('.loc-cwd');
   cwdEl.textContent = `📍 ${shortPath(session.cwd)}`;
   cwdEl.title = session.cwd || '';
-  card.querySelector('.kan-meta').textContent = metaLine(session);
+  card.querySelector('.kan-meta').textContent = metaLine(session) + waitText(session);
   const dsEl = card.querySelector('.kan-diffstat');
   const dsHtml = diffStatHtml(session);
   dsEl.innerHTML = dsHtml;

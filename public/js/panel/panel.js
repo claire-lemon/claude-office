@@ -11,6 +11,9 @@ import { flashPanelError } from '../views/toast.js';
 
 export { setTab } from './changes-tab.js';
 
+// session.turnMs: the last finished turn (event history), null before there is one.
+const turnLabel = ms => !Number.isFinite(ms) ? '' : ` · 지난 턴 ${ms < 60000 ? `${Math.round(ms / 1000)}초` : ms < 3600000 ? `${Math.round(ms / 60000)}분` : `${(ms / 3600000).toFixed(1)}시간`}`;
+
 const prStateLabel = st => ({ OPEN:'열림', MERGED:'머지됨', CLOSED:'닫힘' }[st] || st || '-');
 
 // Same shape as views/board.js's diffStatHtml, duplicated here: views/ and panel/ don't import
@@ -108,7 +111,7 @@ const renderPanelHeader = session => {
   renderPanelName(session);
   const prLabel = (session.prs && session.prs.length) ? prStateLabel(session.prs[0].state) : '-';
   const sub = $('#panel-sub');
-  sub.textContent = `${ANIMAL_LABELS[safeAnimal(session.animal)]} · ${session.branch || '-'} · PR ${prLabel} · ${session.turns ?? '-'}턴`;
+  sub.textContent = `${ANIMAL_LABELS[safeAnimal(session.animal)]} · ${session.branch || '-'} · PR ${prLabel} · ${session.turns ?? '-'}턴${turnLabel(session.turnMs)}`;
   // 📋 has its own row now (renderPanelTodo)
   if (session.meetingId) sub.append(' · ', Object.assign(document.createElement('span'), { className: 'todo-tag', textContent: '🏫 회의' }));
   const loc = $('#panel-loc');
