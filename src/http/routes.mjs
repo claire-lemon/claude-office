@@ -9,6 +9,8 @@ import { moveSession } from '../usecases/move.mjs';
 import { editSession } from '../usecases/edit-session.mjs';
 import { listTodos, todoHistory, createTodo, updateTodo, deleteTodo, startTodo } from '../usecases/todos.mjs';
 import { getMeeting, startMeeting, endMeeting } from '../usecases/meeting.mjs';
+import { narrateInBackground } from '../usecases/narrate.mjs';
+import { refineTodo } from '../usecases/refine-todo.mjs';
 import { readJsonBody } from './body.mjs';
 
 export const send = (res, code, body, type = 'application/json; charset=utf-8') => {
@@ -20,11 +22,14 @@ const findSession = id => listSessions().find(s => s.id === id);
 
 // A 2000-char Korean detail is ~6KB of JSON, over readJsonBody's 4KB default.
 const TODO_BODY_LIMIT = 16 * 1024;
-// Todo usecase errors that mean "no such thing"; every other one is a bad request.
-const TODO_NOT_FOUND = new Set(['unknown todo', 'repo folder not found']);
-const todoError = (res, error) => send(res, TODO_NOT_FOUND.has(error) ? 404 : 400, { error });
-// POST /api/meeting/<action>: the id segment picks the action.
-const MEETING_ACTIONS = { start: startMeeting, end: endMeeting };
+// Todo usecase errors that mean "no such thing" / "taken by a marker link"; every other one is a bad request.
+const TODO_NOT_FOUND = new Set(['unknown todo', 'repo folder not found', 'unknown session']);
+const TODO_CONFLICT = new Set(['already linked']);
+const todoError = (res, error) => send(res, TODO_NOT_FOUND.has(error) ? 404 : TODO_CONFLICT.has(error) ? 409 : 400, { error });
+// POST /api/meeting/<action>: the id segment picks the action. narrate only starts the run (202); the 회의실
+// polls GET /api/meeting for its narrative state.
+const MEETING_ACTIONS = { start: startMeeting, end: endMeeting, narrate: () => narrateInBackground() };
+const MEETING_STATUS = { narrate: 202 };
 
 export const routes = {
     'GET /api/sessions': (req, res) => send(res, 200, { now: Date.now(), sessions: listSessions() }),
@@ -115,7 +120,16 @@ export const routes = {
         if (result.error) return todoError(res, result.error);
         return send(res, 200, { ok: true, opened: result.opened });
     },
+    // ✨ 다듬기: nothing is saved; the 칠판 applies the suggestion through POST /api/todos/:id.
+    'POST /api/refine': async (req, res, id) => {
+        const result = await refineTodo(id).catch(() => ({ error: 'refine failed' }));
+        if (result.error === 'unknown todo') return send(res, 404, { error: result.error });
+        if (result.error) return send(res, 502, { error: '다듬지 못했어요' });
+        return send(res, 200, { ok: true, detail: result.detail });
+    },
     'GET /api/meeting': (req, res) => send(res, 200, getMeeting()),
     'POST /api/meeting': (req, res, id) =>
-        Object.hasOwn(MEETING_ACTIONS, id) ? send(res, 200, { ok: true, ...MEETING_ACTIONS[id]() }) : send(res, 404, { error: 'unknown action' }),
+        Object.hasOwn(MEETING_ACTIONS, id)
+            ? send(res, MEETING_STATUS[id] ?? 200, { ok: true, ...MEETING_ACTIONS[id]() })
+            : send(res, 404, { error: 'unknown action' }),
 };

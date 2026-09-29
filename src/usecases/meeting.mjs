@@ -12,12 +12,14 @@ import { firstPromptHead, lastAssistantText } from '../sources/transcripts.mjs';
 import { columnOf } from '../domain/board.mjs';
 import { ANIMALS, hash } from '../domain/session-view.mjs';
 import { meetingIdIn, meetingId, meetingPrompt, facilitatorGuide, GUIDE_HEADER } from '../domain/meeting.mjs';
-import { autoSection, replaceAuto, meetingSection, appendSection, localDate, startOfYesterday } from '../domain/daily-note.mjs';
+import { autoSection, replaceAuto, meetingSection, appendSection, localDate, startOfYesterday, narrativeOf } from '../domain/daily-note.mjs';
 import { newSessionLink } from '../domain/prompts.mjs';
 import { openUrl } from '../platform/macos.mjs';
 import { archive } from './decide.mjs';
 import { collectCandidates, transcriptOf, listSessions } from './list-sessions.mjs';
 import { listTodos } from './todos.mjs';
+// Import cycle (narrate.mjs uses refreshNote/recentWork): fine, both sides read the other only inside functions.
+import { narrationState } from './narrate.mjs';
 
 // Off-board session view, same shape as todo-links' lean (it never reads the transcript tail or git).
 // ponytail: copy of todo-links.mjs lean(); export it there if a third caller shows up.
@@ -73,6 +75,8 @@ export const getMeeting = (now = Date.now()) => {
         // Archived = the lean status; an archived session is never on the board.
         ended: latest?.view.status === 'archived',
         count: latest?.n ?? 0,
+        // 업무일지 card (finishing design §2.1): today's AI 서술 and the in-server run, if any.
+        narrative: { ...narrativeOf(notes.read(date), date), running: narrationState.running, startedAt: narrationState.startedAt, error: narrationState.error },
     };
 };
 

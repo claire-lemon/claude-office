@@ -182,6 +182,19 @@ export const replaceNarrative = (text, section, date) => {
     return appendSection(doc || noteSkeleton(date), section);
 };
 
+// The 회의실 업무일지 card (finishing design §2.1): the block's body (heading kept, markers dropped) and its
+// "HH:MM 작성" read as that local day's time. date = 'YYYY-MM-DD'.
+export const narrativeOf = (noteText, date) => {
+    const doc = String(noteText || '');
+    const s = doc.indexOf(NARRATIVE_START);
+    const e = s < 0 ? -1 : doc.indexOf(NARRATIVE_END, s);
+    if (e < 0) return { exists: false, text: '', writtenAt: null };
+    const text = doc.slice(s + NARRATIVE_START.length, e).trim();
+    const time = text.split('\n')[0].match(/(\d{1,2}):(\d{2}) 작성/);
+    const [y, m, d] = date.split('-').map(Number);
+    return { exists: true, text, writtenAt: time ? new Date(y, m - 1, d, Number(time[1]), Number(time[2])).getTime() : null };
+};
+
 // Once a day: after `hour` (local) and only while the note has no AI 서술 yet.
 export const narrationDue = ({ now, text, hour }) => new Date(now).getHours() >= hour && !String(text || '').includes(NARRATIVE_START);
 

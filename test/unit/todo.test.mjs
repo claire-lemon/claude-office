@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     TODO_MARK, markerLine, todoIdIn, normalizeTodoPatch, todoStatus, visibleToday, isSameLocalDay, toTodoView, linkChanges, mergeLinks, touchedSince,
+    assignedTo,
 } from '../../src/domain/todo.mjs';
 import { todoPrompt, NEXT_PROMPT_LIMIT } from '../../src/domain/prompts.mjs';
 
@@ -126,6 +127,28 @@ test('normalizeTodoPatch: every error', () => {
     [true, 'false', null].forEach(deleted => assert.equal(err({ deleted }), 'deleted must be false'));
 });
 
+test('normalizeTodoPatch: assign / unassign take a session id, update only', () => {
+    const err = (raw, opts) => normalizeTodoPatch(raw, opts).error;
+    assert.deepEqual(normalizeTodoPatch({ assign: 'local_a1-B2' }), { ok: true, patch: { assign: 'local_a1-B2' } });
+    assert.deepEqual(normalizeTodoPatch({ unassign: 'x'.repeat(80), title: '새 제목' }), { ok: true, patch: { unassign: 'x'.repeat(80), title: '새 제목' } });
+    ['local a', 'local/../x', '', 'x'.repeat(81), '세션', 1, null, ['local_a']].forEach(v => {
+        assert.equal(err({ assign: v }), 'assign must be a session id', JSON.stringify(v));
+        assert.equal(err({ unassign: v }), 'unassign must be a session id', JSON.stringify(v));
+    });
+    assert.equal(err({ title: 'x', folder: '/r', assign: 'local_a' }, { create: true }), 'unknown field: assign');
+    assert.equal(err({ title: 'x', folder: '/r', unassign: 'local_a' }, { create: true }), 'unknown field: unassign');
+});
+
+test('assignedTo: the todo holding the session, deleted ones too; records without assigned are fine', () => {
+    const todos = { a1: todo(), b2: { ...todo(), assigned: ['s1', 's2'] }, c3: { ...todo(), deletedAt: 5, assigned: ['s3'] } };
+    assert.equal(assignedTo(todos, 's2'), 'b2');
+    assert.equal(assignedTo(todos, 's3'), 'c3');
+    assert.equal(assignedTo(todos, 's9'), null);
+    assert.equal(assignedTo({}, 's1'), null);
+    assert.deepEqual(toTodoView({ id: 'a1', todo: todo(), sessions: [], now: 1 }).assigned, []);
+    assert.deepEqual(toTodoView({ id: 'b2', todo: todos.b2, sessions: [], now: 1 }).assigned, ['s1', 's2']);
+});
+
 test('todoPrompt: marker first, detail, project, previous session only on a retry, closing line', () => {
     const t = { id: 'a1b2c3', title: '결제 모듈 리팩터링', detail: 'PG 응답 파싱을 use-case로', folder: '/r/api' };
     assert.equal(
@@ -154,8 +177,8 @@ test('todoPrompt: over the limit, detail is cut and the marker line never is', (
 });
 
 // A live link as linkIndex builds it: board views carry branch/prs/report too.
-const live = (todoId, id, status, lastAt, extra = {}) => ({ todoId, view: { id, title: `t-${id}`, animal: 'cat', status, column: 'working', lastAt, decidedAt: null, ...extra } });
-const record = (todoId, status, lastAt, seenAt, extra = {}) => ({ todoId, title: 't-s1', animal: 'cat', status, decidedAt: null, lastAt, seenAt, ...extra });
+const live = (todoId, id, status, lastAt, extra = {}) => ({ todoId, view: { id, title: `t-${id}`, animal: 'cat', status, column: 'working', lastAt, decidedAt: null, via: 'marker', ...extra } });
+const record = (todoId, status, lastAt, seenAt, extra = {}) => ({ todoId, via: 'marker', title: 't-s1', animal: 'cat', status, decidedAt: null, lastAt, seenAt, ...extra });
 
 test('linkChanges: new links and todo / title / status / decision changes only; lastAt alone writes nothing', () => {
     assert.deepEqual(linkChanges({}, [live('a1b2c3', 's1', 'working', 100, { branch: 'feat/x', prs: [], report: null })], 500), { s1: record('a1b2c3', 'working', 100, 500) });
@@ -166,6 +189,10 @@ test('linkChanges: new links and todo / title / status / decision changes only; 
     assert.deepEqual(linkChanges(stored, [live('a1b2c3', 's1', 'done', 900, { decidedAt: 950 })], 500), { s1: record('a1b2c3', 'done', 900, 50, { decidedAt: 950 }) });
     assert.deepEqual(Object.keys(linkChanges(stored, [live('zz9x0y', 's1', 'working', 100)], 500)), ['s1']);
     assert.deepEqual(Object.keys(linkChanges(stored, [live('a1b2c3', 's1', 'working', 100, { title: '새 이름' })], 500)), ['s1']);
+    // a marker link that became an assignment (or a pre-배정 record without via) is rewritten once
+    assert.deepEqual(linkChanges(stored, [live('a1b2c3', 's1', 'working', 100, { via: 'assigned' })], 500), { s1: record('a1b2c3', 'working', 100, 50, { via: 'assigned' }) });
+    const { via, ...old } = stored.s1;
+    assert.deepEqual(Object.keys(linkChanges({ s1: old }, [live('a1b2c3', 's1', 'working', 100)], 500)), ['s1']);
     // a stored link that is not live now is left alone (mergeLinks shows it)
     assert.deepEqual(linkChanges(stored, [], 500), {});
 });
@@ -174,18 +201,19 @@ test('mergeLinks: live wins with all its fields; vanished done/archived stay, th
     const stored = {
         s1: record('a1b2c3', 'working', 100, 50),
         s2: record('a1b2c3', 'archived', 80, 40, { title: '1차', decidedAt: 90 }),
-        s3: record('zz9x0y', 'done', 70, 30, { title: '끝', decidedAt: 75 }),
-        s4: record('zz9x0y', 'working', 60, 20, { title: '중단' }),
+        s3: record('zz9x0y', 'done', 70, 30, { title: '끝', decidedAt: 75, via: 'assigned' }),
+        // written before 세션 배정: no via, so it was a marker link
+        s4: (({ via, ...r }) => r)(record('zz9x0y', 'working', 60, 20, { title: '중단' })),
     };
     const liveOne = live('a1b2c3', 's1', 'review', 200, { column: 'pending', branch: 'feat/x', prs: [{ url: 'u' }], report: { '한 줄 요약': '1. x' } });
     const merged = mergeLinks(stored, [liveOne]);
     assert.deepEqual([...merged.keys()].sort(), ['a1b2c3', 'zz9x0y']);
     const [first, second] = merged.get('a1b2c3');
     assert.equal(first, liveOne.view);
-    assert.deepEqual(second, { id: 's2', title: '1차', animal: 'cat', status: 'archived', column: null, lastAt: 80, decidedAt: 90 });
+    assert.deepEqual(second, { id: 's2', title: '1차', animal: 'cat', status: 'archived', column: null, lastAt: 80, decidedAt: 90, via: 'marker' });
     assert.deepEqual(merged.get('zz9x0y'), [
-        { id: 's3', title: '끝', animal: 'cat', status: 'done', column: 'done', lastAt: 70, decidedAt: 75 },
-        { id: 's4', title: '중단', animal: 'cat', status: 'stale', column: null, lastAt: 60, decidedAt: null },
+        { id: 's3', title: '끝', animal: 'cat', status: 'done', column: 'done', lastAt: 70, decidedAt: 75, via: 'assigned' },
+        { id: 's4', title: '중단', animal: 'cat', status: 'stale', column: null, lastAt: 60, decidedAt: null, via: 'marker' },
     ]);
     assert.deepEqual(mergeLinks({}, []), new Map());
 });

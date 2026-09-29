@@ -187,10 +187,13 @@ const seedHistory = async () => {
     });
     fs.writeFileSync(decisionsFile, JSON.stringify(decisions));
     const todo = (title, folder, extra) => ({ title, detail: '', folder, createdAt: yesterday(9), source: 'manual', manual: null, deletedAt: null, ...extra });
+    const stored = JSON.parse(fs.readFileSync(TODOS, 'utf8'));
     fs.writeFileSync(
         TODOS,
         JSON.stringify({
-            ...JSON.parse(fs.readFileSync(TODOS, 'utf8')),
+            ...stored,
+            // 세션 배정: local_1 (no marker) was started from the app and put on demo01 by hand.
+            ...(stored.demo01 ? { demo01: { ...stored.demo01, assigned: ['local_1'] } } : {}),
             demo04: todo('배포 스크립트 정리', repoDir(2)),
             demo05: todo('로그 수집기 교체', repoDir(2), { deletedAt: yesterday(15) }),
         }),

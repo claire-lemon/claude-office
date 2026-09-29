@@ -5,7 +5,7 @@ import path from 'node:path';
 import { PORT, PUBLIC_DIR, NARRATE_AUTO, NARRATE_EVERY } from '../config.mjs';
 import { routes, send } from './routes.mjs';
 import { installGuide } from '../usecases/meeting.mjs';
-import { narrateIfDue } from '../usecases/narrate.mjs';
+import { narrateOnTimer } from '../usecases/narrate.mjs';
 
 const ORIGINS = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`];
 const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
@@ -45,7 +45,8 @@ try {
 // 오늘 일지 AI 서술: checked at start and every NARRATE_EVERY while the server runs; written once a day after
 // NARRATE_HOUR (config NARRATE_AUTO says when the timer runs at all).
 // ponytail: in-process timer, so no 서술 while the server is off; the CLI `narrate` covers cron/launchd if needed.
-const narrate = () => narrateIfDue().catch(e => console.error(`narrative not written: ${e.message}`));
+// Same lock as the 회의실 button: whichever comes second skips, and errors are logged there.
+const narrate = () => narrateOnTimer();
 
 server.listen(PORT, '127.0.0.1', () => {
     console.log(`office open: http://127.0.0.1:${PORT}`);

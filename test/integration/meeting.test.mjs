@@ -78,7 +78,10 @@ test('server start writes the facilitator guide (version header, CLI path)', () 
 });
 
 test('before any meeting: no session, no note', async () => {
-    assert.deepEqual(await get('/api/meeting'), { date: TODAY, note: { path: NOTE, exists: false }, session: null, ended: false, count: 0 });
+    assert.deepEqual(await get('/api/meeting'), {
+        date: TODAY, note: { path: NOTE, exists: false }, session: null, ended: false, count: 0,
+        narrative: { exists: false, text: '', writtenAt: null, running: false, startedAt: null, error: null },
+    });
 });
 
 test('start (dry run): note with the auto block, facilitator deep link with meeting #1', async () => {

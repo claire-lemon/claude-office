@@ -6,6 +6,7 @@ import { loadAppSessions } from '../sources/app-sessions.mjs';
 import { loadStates } from '../sources/hook-states.mjs';
 import * as decisionsStore from '../sources/decisions.mjs';
 import * as overridesStore from '../sources/overrides.mjs';
+import * as todosStore from '../sources/todos.mjs';
 import * as summaries from '../sources/summaries.mjs';
 import { transcriptPathFor, lastAssistantText, firstPromptHead } from '../sources/transcripts.mjs';
 import { gitInfo, mergeBase, shortstat, untrackedFiles, addedFilePatch } from '../sources/git.mjs';
@@ -13,7 +14,7 @@ import { countLines, isBinaryPatch } from '../domain/diff.mjs';
 import { activeDecision, deriveStatus, seatAtDesks } from '../domain/status.mjs';
 import { parseReport } from '../domain/report.mjs';
 import { toSessionView } from '../domain/session-view.mjs';
-import { todoIdIn } from '../domain/todo.mjs';
+import { todoIdIn, assignedTo } from '../domain/todo.mjs';
 import { meetingIdIn } from '../domain/meeting.mjs';
 
 // New (untracked) files added to a tracked shortstat's counts, so a report that only created
@@ -74,6 +75,7 @@ export const listSessions = (now = Date.now()) => {
     const states = loadStates();
     const decisions = decisionsStore.load();
     const overrides = overridesStore.load();
+    const todos = todosStore.load();
     const candidates = collectCandidates({ now, decisions, apps, states })
         // Held sessions stay on the board past the 24h window; archived ones leave it (see listArchived).
         .filter(s => (now - s.lastAt < DAY || s.active === 'hold') && s.active !== 'archive' && !s.app?.isArchived)
@@ -94,9 +96,17 @@ export const listSessions = (now = Date.now()) => {
         const diffStat = ['review', 'question'].includes(status) ? statFor(id, state?.at, app) : null;
         const override = overrides[id];
         const view = toSessionView({ cli, state, app, lastAt, cwd, transcript, lastText, report, id, summary, status, baseStatus, gi, diffStat, home: HOME, override });
-        // Additive fields: the todo / 회의실 meeting this session was started for, and when the active lead
-        // decision was made.
+        // Additive fields: the todo this session was started for (marker) or assigned to by hand, the 회의실
+        // meeting it was started for, and when the active lead decision was made.
         const head = firstPromptHead(transcript);
-        return { ...view, todoId: todoIdIn(head), meetingId: meetingIdIn(head), decidedAt: active ? decisions[id].at : null };
+        const marker = todoIdIn(head);
+        const assigned = marker ? null : assignedTo(todos, id);
+        return {
+            ...view,
+            todoId: marker ?? assigned,
+            todoVia: marker ? 'marker' : assigned ? 'assigned' : null,
+            meetingId: meetingIdIn(head),
+            decidedAt: active ? decisions[id].at : null,
+        };
     });
 };

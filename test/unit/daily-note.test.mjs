@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
     STATUS_LABEL, AUTO_START, AUTO_END, autoSection, replaceAuto, noteSkeleton, meetingSection, appendSection,
     localDate, hhmm, startOfYesterday, NARRATIVE_START, NARRATIVE_END, narrativeInput, narrativeSection, replaceNarrative, narrationDue,
-    historyLine, todoHistory,
+    historyLine, todoHistory, narrativeOf,
 } from '../../src/domain/daily-note.mjs';
 
 // Local-time moments so HH:MM and dates don't depend on the machine's timezone.
@@ -219,4 +219,21 @@ test('narrationDue: from the given hour on, only while the note has no narrative
     assert.equal(narrationDue({ now: at(5, 0), text: note, hour: 5 }), true);
     assert.equal(narrationDue({ now: at(23, 0), text: null, hour: 5 }), true);
     assert.equal(narrationDue({ now: at(9, 0), text: replaceNarrative(note, `${NARRATIVE_START}\n1. 없음\n${NARRATIVE_END}`, DATE), hour: 5 }), false);
+});
+
+test('narrativeOf: body between the markers (heading kept), its HH:MM 작성 as that day\'s time; none -> empty', () => {
+    const section = narrativeSection({ at: at(5, 3), since: SINCE, count: 2, body: '1. **api**: 결제를 나눴다.' });
+    const note = replaceNarrative(`${noteSkeleton(DATE)}\n${AUTO_START}\n1. x\n${AUTO_END}\n\n## 회의 1 (09:00 ~ 09:10)\n`, section, DATE);
+    const r = narrativeOf(note, DATE);
+    assert.deepEqual(r, {
+        exists: true,
+        text: '## 어제 이야기 (AI 서술 · 2026-09-28 00:00 이후 세션 2개 · 05:03 작성)\n1. **api**: 결제를 나눴다.',
+        writtenAt: at(5, 3),
+    });
+    // a hand-edited heading without the time still reads as a narrative
+    assert.deepEqual(narrativeOf(`${NARRATIVE_START}\n## 어제 이야기\n1. x\n${NARRATIVE_END}`, DATE), { exists: true, text: '## 어제 이야기\n1. x', writtenAt: null });
+    const none = { exists: false, text: '', writtenAt: null };
+    assert.deepEqual(narrativeOf(noteSkeleton(DATE), DATE), none);
+    assert.deepEqual(narrativeOf(`${NARRATIVE_START}\n끝 마커 없음`, DATE), none);
+    assert.deepEqual(narrativeOf(null, DATE), none);
 });

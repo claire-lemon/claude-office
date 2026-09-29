@@ -1,15 +1,17 @@
 // linkIndex(boardSessions, now) -> Map<todoId, LinkedSession[]> (design §6.2): every session whose transcript
-// head carries a #todo- marker, on the board or not. Board sessions reuse their full view; the rest get a
-// lean one that never reads the transcript tail or git. Links seen once are kept in links.json (todo-history
-// design §3.1), so a todo keeps its sessions after their transcripts are cleaned up.
+// head carries a #todo- marker or that a todo assigned by hand (finishing design §4), on the board or not.
+// Board sessions reuse their full view; the rest get a lean one that never reads the transcript tail or git.
+// Links seen once are kept in links.json (todo-history design §3.1), so a todo keeps its sessions after their
+// transcripts are cleaned up.
 import path from 'node:path';
 import * as decisionsStore from '../sources/decisions.mjs';
 import * as overridesStore from '../sources/overrides.mjs';
 import * as linksStore from '../sources/links.mjs';
+import * as todosStore from '../sources/todos.mjs';
 import { firstPromptHead } from '../sources/transcripts.mjs';
 import { columnOf } from '../domain/board.mjs';
 import { ANIMALS, hash } from '../domain/session-view.mjs';
-import { todoIdIn, linkChanges, mergeLinks } from '../domain/todo.mjs';
+import { todoIdIn, assignedTo, linkChanges, mergeLinks } from '../domain/todo.mjs';
 import { collectCandidates, transcriptOf } from './list-sessions.mjs';
 
 // branch/prs/report ride along for todoPrompt's "이전 세션" line (board sessions only).
@@ -42,14 +44,28 @@ const saveChanges = changes => {
     }
 };
 
+// 배정 해제: the snapshot goes too, or mergeLinks would bring the session back as a 지난 세션.
+export const forgetLinks = ids => {
+    try {
+        linksStore.remove(ids);
+    } catch (e) {
+        console.error(`links.json not written: ${e.message}`);
+    }
+};
+
 export const linkIndex = (boardSessions, now = Date.now()) => {
     const onBoard = new Map(boardSessions.map(s => [s.id, s]));
     const decisions = decisionsStore.load();
     const overrides = overridesStore.load();
+    const todos = todosStore.load();
+    // A marker link wins over an assignment (updateTodo never lets both happen). Deleted todos keep theirs.
     const live = collectCandidates({ now, decisions })
-        .map(c => ({ todoId: todoIdIn(firstPromptHead(transcriptOf(c))), c }))
+        .map(c => {
+            const marker = todoIdIn(firstPromptHead(transcriptOf(c)));
+            return { todoId: marker ?? assignedTo(todos, c.id), via: marker ? 'marker' : 'assigned', c };
+        })
         .filter(l => l.todoId)
-        .map(({ todoId, c }) => ({ todoId, view: onBoard.has(c.id) ? pick(onBoard.get(c.id)) : lean(c, decisions, overrides) }));
+        .map(({ todoId, via, c }) => ({ todoId, view: { ...(onBoard.has(c.id) ? pick(onBoard.get(c.id)) : lean(c, decisions, overrides)), via } }));
     const stored = linksStore.load();
     const changes = linkChanges(stored, live, now);
     if (Object.keys(changes).length) saveChanges(changes);

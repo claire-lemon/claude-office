@@ -5,12 +5,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { TODO_FOLDERS_LIMIT, OFFICE_DIR } from '../config.mjs';
 import * as todosStore from '../sources/todos.mjs';
+import * as decisionsStore from '../sources/decisions.mjs';
 import { loadAppSessions } from '../sources/app-sessions.mjs';
-import { normalizeTodoPatch, toTodoView, visibleToday, isSameLocalDay, touchedSince } from '../domain/todo.mjs';
+import { firstPromptHead } from '../sources/transcripts.mjs';
+import { normalizeTodoPatch, toTodoView, visibleToday, isSameLocalDay, touchedSince, todoIdIn, assignedTo } from '../domain/todo.mjs';
 import { todoPrompt, newSessionLink } from '../domain/prompts.mjs';
 import { openUrl } from '../platform/macos.mjs';
-import { listSessions } from './list-sessions.mjs';
-import { linkIndex } from './todo-links.mjs';
+import { listSessions, collectCandidates, transcriptOf } from './list-sessions.mjs';
+import { linkIndex, forgetLinks } from './todo-links.mjs';
 
 const ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const newId = taken => {
@@ -79,21 +81,53 @@ export const createTodo = (raw, now = Date.now(), { source = 'manual' } = {}) =>
     return { todo: toTodoView({ id, todo, sessions: [], now }) };
 };
 
-// { done } records a manual check (it wins until something newer happens); { deleted: false } undoes a delete.
+// One todo as a view, off the 칠판 or deleted too (✨ 다듬기); null when there is no such todo.
+export const todoView = (id, now = Date.now()) => {
+    const todo = find(todosStore.load(), id);
+    return todo ? viewOf(id, todo, links(now), now) : null;
+};
+
+// 세션 배정 (finishing design §4.1) -> { error } | { marker } (true = this todo's by marker already: nothing to
+// store). Any session the office knows can be assigned, archived ones too; a marker link is never moved.
+const checkAssign = (id, sessionId) => {
+    const c = collectCandidates({ decisions: decisionsStore.load() }).find(x => x.id === sessionId);
+    if (!c) return { error: 'unknown session' };
+    const marker = todoIdIn(firstPromptHead(transcriptOf(c)));
+    if (marker && marker !== id) return { error: 'already linked' };
+    return { marker: marker === id };
+};
+
+// { done } records a manual check (it wins until something newer happens); { deleted: false } undoes a delete;
+// { assign } / { unassign } add / drop a session by hand (one session, one todo: assigning moves it).
 export const updateTodo = (id, raw, now = Date.now()) => {
-    const current = find(todosStore.load(), id);
+    const stored = todosStore.load();
+    const current = find(stored, id);
     if (!current) return { error: 'unknown todo' };
     const result = normalizeTodoPatch(raw);
     if (!result.ok) return { error: result.error };
-    const { done, deleted, ...fields } = result.patch;
+    const { done, deleted, assign, unassign, ...fields } = result.patch;
     if (fields.folder !== undefined && !isDir(fields.folder)) return { error: 'folder not found' };
+    const check = assign === undefined ? {} : checkAssign(id, assign);
+    if (check.error) return { error: check.error };
+    const adding = assign !== undefined && !check.marker ? assign : null;
+    // Moving: the other todo lets go first, so a crash between the two writes never leaves it in both lists.
+    // ponytail: two writes (sources/todos.mjs saves one record); add a saveMany there if this needs to be atomic.
+    const owner = adding && assignedTo(stored, adding);
+    if (owner && owner !== id) todosStore.save(owner, { ...stored[owner], assigned: stored[owner].assigned.filter(s => s !== adding) });
+    const before = current.assigned ?? [];
+    const kept = before.filter(s => s !== unassign);
+    const assigned = adding && !kept.includes(adding) ? [...kept, adding] : kept;
     const todo = {
         ...current,
         ...fields,
         ...(done === undefined ? {} : { manual: { state: done ? 'done' : 'open', at: now } }),
         ...(deleted === false ? { deletedAt: null } : {}),
+        ...(assign === undefined && unassign === undefined ? {} : { assigned }),
     };
     todosStore.save(id, todo);
+    // Only what this todo really let go: a no-op unassign must not drop another link's snapshot.
+    const dropped = before.filter(s => !assigned.includes(s));
+    if (dropped.length) forgetLinks(dropped);
     return { todo: viewOf(id, todo, links(now), now) };
 };
 

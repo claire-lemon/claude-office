@@ -16,10 +16,14 @@ export const TODO_FIELDS = {
     folder: { path: true, required: true },
 };
 
-// Update-only switches: the checkbox (manual done/open) and 되돌리기 (undo a soft delete).
+// Update-only switches: the checkbox (manual done/open), 되돌리기 (undo a soft delete) and 세션 배정
+// (finishing design §4: a session id; whether it exists is the usecase's job).
+const SESSION_ID = /^[A-Za-z0-9_-]{1,80}$/;
 const SWITCHES = {
     done: v => typeof v === 'boolean' || 'done must be a boolean',
     deleted: v => v === false || 'deleted must be false',
+    assign: v => (typeof v === 'string' && SESSION_ID.test(v)) || 'assign must be a session id',
+    unassign: v => (typeof v === 'string' && SESSION_ID.test(v)) || 'unassign must be a session id',
 };
 
 const isPlainObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -83,10 +87,14 @@ export const isSameLocalDay = (a, b) => a != null && b != null && new Date(a).to
 // The 칠판 shows open/started always; done only on the day it was done (hidden after midnight).
 export const visibleToday = (view, now) => view.status !== 'done' || isSameLocalDay(view.doneAt, now);
 
+// The todo that assigned this session by hand (finishing design §4.1), else null. todos = todos.json.
+export const assignedTo = (todos, sessionId) => Object.keys(todos).find(id => (todos[id].assigned ?? []).includes(sessionId)) ?? null;
+
 export const toTodoView = ({ id, todo, sessions, now }) => {
     const sorted = [...sessions].sort(byRecent);
     return {
         ...todo,
+        assigned: todo.assigned ?? [], // records written before 세션 배정 have none
         id,
         project: path.basename(todo.folder || ''),
         ...todoStatus({ todo, sessions: sorted, now }),
@@ -98,12 +106,12 @@ export const toTodoView = ({ id, todo, sessions, now }) => {
 // ── 연결 기록 (todo-history design §3.1): links.json keeps every link seen, so it outlives its transcript ──
 
 // Fields whose change is worth a write. lastAt alone is not: it moves every turn and the 칠판 polls every 2s.
-const SNAPSHOT_KEYS = ['todoId', 'title', 'status', 'decidedAt'];
+const SNAPSHOT_KEYS = ['todoId', 'via', 'title', 'status', 'decidedAt'];
 const toRecord = (todoId, view, seenAt) => ({
-    todoId, title: view.title, animal: view.animal, status: view.status, decidedAt: view.decidedAt ?? null, lastAt: view.lastAt, seenAt,
+    todoId, via: view.via, title: view.title, animal: view.animal, status: view.status, decidedAt: view.decidedAt ?? null, lastAt: view.lastAt, seenAt,
 });
 
-// stored = links.json, live = [{ todoId, view }] found by marker now. -> { [sessionId]: LinkRecord } to upsert:
+// stored = links.json, live = [{ todoId, view }] found by marker or 배정 now (view.via says which). -> { [sessionId]: LinkRecord } to upsert:
 // new links and ones whose todo / title / status / decision moved. seenAt = when the link was first seen.
 export const linkChanges = (stored, live, now) =>
     Object.fromEntries(
@@ -121,7 +129,8 @@ export const linkChanges = (stored, live, now) =>
 const KEEPS_STATUS = new Set(['done', 'archived']);
 const vanished = (id, r) => {
     const status = KEEPS_STATUS.has(r.status) ? r.status : 'stale';
-    return { id, title: r.title, animal: r.animal, status, column: columnOf(status), lastAt: r.lastAt, decidedAt: r.decidedAt ?? null };
+    // Records written before 세션 배정 have no via: they were all marker links.
+    return { id, title: r.title, animal: r.animal, status, column: columnOf(status), lastAt: r.lastAt, decidedAt: r.decidedAt ?? null, via: r.via ?? 'marker' };
 };
 
 // -> Map<todoId, LinkedSession[]> recent first. A live view always wins over its snapshot (all its fields kept).

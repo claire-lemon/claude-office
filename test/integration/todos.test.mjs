@@ -92,7 +92,7 @@ test('create -> list -> update -> delete -> deleted list -> restore', async () =
     assert.match(id, /^[a-z0-9]{6}$/);
     assert.equal(typeof createdAt, 'number');
     assert.deepEqual(rest, {
-        title: '결제 모듈', detail: '', folder: repoA, source: 'manual', manual: null, deletedAt: null,
+        title: '결제 모듈', detail: '', folder: repoA, source: 'manual', manual: null, deletedAt: null, assigned: [],
         project: 'api', status: 'open', doneAt: null, by: null, sessions: [], latest: null,
     });
     assert.ok((await list()).todos.some(t => t.id === id));
@@ -255,7 +255,7 @@ test('sessions off the board still link: an old one reads stale (started), an ar
 
     const s = await todoById(stale.id);
     assert.deepEqual([s.status, s.by], ['started', 'session']);
-    assert.deepEqual(s.sessions, [{ id: 'local_old', title: 'local_old', animal: s.sessions[0].animal, status: 'stale', column: null, lastAt: NOW - DAYS(3), decidedAt: null }]);
+    assert.deepEqual(s.sessions, [{ id: 'local_old', title: 'local_old', animal: s.sessions[0].animal, status: 'stale', column: null, lastAt: NOW - DAYS(3), decidedAt: null, via: 'marker' }]);
     const a = await todoById(arch.id);
     assert.deepEqual([a.status, a.by, a.doneAt, a.sessions[0].status, a.sessions[0].column], ['done', 'session', archivedAt, 'archived', null]);
     const board = await sessions();
@@ -293,7 +293,7 @@ test('연결 기록: links.json keeps links after the transcript is gone (30-day
     // only the snapshot fields are stored (no branch / prs / report)
     const seen = links();
     assert.deepEqual(seen.local_h1, {
-        todoId: finished.id, title: 'local_h1 세션', animal: first.done.sessions[0].animal, status: 'done', decidedAt: confirmedAt,
+        todoId: finished.id, via: 'marker', title: 'local_h1 세션', animal: first.done.sessions[0].animal, status: 'done', decidedAt: confirmedAt,
         lastAt: first.done.sessions[0].lastAt, seenAt: seen.local_h1.seenAt,
     });
     assert.deepEqual([seen.local_h2.todoId, seen.local_h2.status], [working.id, 'working']);
@@ -314,7 +314,7 @@ test('연결 기록: links.json keeps links after the transcript is gone (30-day
 
     const done = await todoById(finished.id);
     assert.deepEqual([done.status, done.by, done.doneAt], ['done', 'session', confirmedAt]);
-    assert.deepEqual(done.sessions, [{ id: 'local_h1', title: 'local_h1 세션', animal: seen.local_h1.animal, status: 'done', column: 'done', lastAt: seen.local_h1.lastAt, decidedAt: confirmedAt }]);
+    assert.deepEqual(done.sessions, [{ id: 'local_h1', title: 'local_h1 세션', animal: seen.local_h1.animal, status: 'done', column: 'done', lastAt: seen.local_h1.lastAt, decidedAt: confirmedAt, via: 'marker' }]);
     const cut = await todoById(working.id);
     assert.deepEqual([cut.status, cut.by, cut.sessions.length, cut.sessions[0].id, cut.sessions[0].status, cut.sessions[0].column], ['started', 'session', 1, 'local_h2', 'stale', null]);
     // the vanished snapshot is read, not rewritten
