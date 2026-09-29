@@ -187,5 +187,5 @@ type: office-daily
    1. 앱이 `folder=~/.claude/office`를 무시하고 scratch 작업 공간에 세션을 열었다(첫 메시지에 "without choosing a project folder" 안내). 그래서 `OFFICE_DIR/CLAUDE.md`가 읽히지 않았다 → 프롬프트에 `지침: <절대 경로>`를 넣고 "지침 파일을 먼저 읽고 진행"하도록 바꿈. §10.6의 앱 번들 근거는 Finder 서비스에만 해당했다.
    2. 실제 대화 기록은 첫 프롬프트 앞에 약 30KB의 preamble(queue 항목, hook 첨부)이 있어 16KB 헤드에서 표식을 못 찾았다(데모 기록은 작아 테스트가 못 잡음) → `HEAD_BYTES` 256KB. `#todo-` 연결도 같은 코드라 함께 고쳐짐.
 5. 남은 것
-   1. 실제 회의 한 바퀴(회의 시작 → 앱에서 Enter → 진행자와 대화 → CLI 기록 → 회의 끝)는 사용자 테스트 몫. 진행자의 Bash 권한 확인이 매번 뜨면 `~/.claude/office/.claude/settings.json` 허용 규칙 검토.
+   1. 실제 회의 한 바퀴(회의 시작 → 앱에서 Enter → 진행자와 대화 → CLI 기록 → 회의 끝)는 사용자 테스트 몫. 진행자의 Bash 권한 확인이 매번 뜨면 `~/.claude/office/.claude/settings.json` 허용 규칙 검토. → 실제로 뜬 것은 지침·일지 `Read` 확인이었고, 사용자 설정 허용 규칙으로 해결([진행자 읽기 허용](2026-09-29-facilitator-permissions-design.md)).
    2. 자정을 걸친 회의는 "오늘" 진행자로 잡히지 않는다.

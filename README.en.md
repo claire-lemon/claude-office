@@ -63,7 +63,7 @@ flowchart TB
 
 ```
 server.mjs              entry (runs src/http/server.mjs)
-install.mjs             install / uninstall hooks
+install.mjs             install / uninstall hooks and the facilitator read rules
 hooks/report.mjs        the hook (standalone, no imports, for startup speed)
 bin/office.mjs          blackboard CLI (for you; no server needed)
 src/
@@ -88,7 +88,7 @@ test/integration/       server, fixtures, temp git repos
 - Rules live in tables. A new column, drop rule, filter, button, or editable field is one more row (where: [design §4](docs/specs/2026-09-28-board-interactions-design.md#4-확장-지점-나중에-기능을-붙이는-곳), Korean).
 - The server (`src/domain/board.mjs`) decides which column a session is in and where it may be dropped, and sends that as `column` and `moves`. The page only displays it.
 - File writes and OS commands live only in `sources/` and `platform/`.
-- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md), [meeting room](docs/specs/2026-09-29-meeting-room-design.md), [AI narrative](docs/specs/2026-09-29-daily-narrative-design.md), [link history](docs/specs/2026-09-29-todo-history-design.md), [finishing touches](docs/specs/2026-09-29-finishing-touches-design.md), [event history](docs/specs/2026-09-29-event-history-design.md); product review: [`docs/product-review-20260929.md`](docs/product-review-20260929.md)
+- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md), [meeting room](docs/specs/2026-09-29-meeting-room-design.md), [AI narrative](docs/specs/2026-09-29-daily-narrative-design.md), [link history](docs/specs/2026-09-29-todo-history-design.md), [finishing touches](docs/specs/2026-09-29-finishing-touches-design.md), [event history](docs/specs/2026-09-29-event-history-design.md), [facilitator read rules](docs/specs/2026-09-29-facilitator-permissions-design.md); product review: [`docs/product-review-20260929.md`](docs/product-review-20260929.md)
 
 ## Try the demo first (touches no real settings)
 
@@ -100,7 +100,7 @@ Ten fake sessions change state every 8 seconds. Open `http://127.0.0.1:7770`.
 
 ## Use it for real
 
-1. Install the hooks. This backs up `~/.claude/settings.json`, then adds `UserPromptSubmit` / `Notification` / `Stop` hooks.
+1. Install the hooks. This backs up `~/.claude/settings.json`, then adds `UserPromptSubmit` / `Notification` / `Stop` hooks and two read rules for the meeting facilitator.
    ```bash
    node install.mjs
    ```
@@ -112,6 +112,8 @@ Ten fake sessions change state every 8 seconds. Open `http://127.0.0.1:7770`.
 4. Give a new session a task in the app. Its employee starts typing. When it finishes, it raises a hand ("보고드려요", "reporting in"). Click the card to read the report and diff, then open the chat or confirm.
 
 To open a session's panel directly: `http://127.0.0.1:7777/?open=<session id>` (add `&tab=diff` for the changes tab).
+
+The read rules open `Read` for exactly two places: `~/.claude/office/CLAUDE.md` (the facilitator guide) and `~/.claude/office/daily/**` (daily notes). The app opens the facilitator in a worktree or a scratch workspace, so those files sit outside its working folder and every meeting would ask for a click ([design](docs/specs/2026-09-29-facilitator-permissions-design.md)). If you installed before, run `node install.mjs` once more from the main checkout (running it from a worktree points the hooks at that worktree).
 
 Hooks only see turns that start **after** installation. Older sessions active in the last 24 hours show up grey (state unknown). If there are app sessions but no hook record at all, a banner under the header says to run `node install.mjs`; with no sessions at all, it shows the three setup steps.
 
@@ -217,7 +219,7 @@ The **meeting room door** next to the blackboard (it swings open on hover; while
 node install.mjs --uninstall
 ```
 
-Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office` (decisions, renames, todos, daily notes, the facilitator guide and the event history live there). To drop only the event history, `rm -rf ~/.claude/office/events` (wait times fall back to the last event and the last-turn time goes blank). The dashboard only reads app data and sessions, so nothing else changes.
+This removes only the office hooks and the facilitator read rules. Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office` (decisions, renames, todos, daily notes, the facilitator guide and the event history live there). To drop only the event history, `rm -rf ~/.claude/office/events` (wait times fall back to the last event and the last-turn time goes blank). The dashboard only reads app data and sessions, so nothing else changes.
 
 ## Tests
 
