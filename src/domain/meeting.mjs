@@ -18,7 +18,7 @@ export const meetingPrompt = (id, notePath, guidePath) =>
 
 // First line of CLAUDE.md. The server rewrites the guide only when this line differs, so hand edits
 // survive until the version is bumped.
-export const GUIDE_VERSION = 3;
+export const GUIDE_VERSION = 4;
 export const GUIDE_HEADER = `<!-- claude-office guide v${GUIDE_VERSION} -->`;
 
 // v3 (meeting-board-sync design §2.4): no CLI. The facilitator only talks; its `### 칠판` list is the day's
@@ -63,9 +63,11 @@ export const facilitatorGuide = () => `${GUIDE_HEADER}
 ## 칠판 형식
 \`\`\`markdown
 ### 칠판
-1. 결제 모듈 리팩터링 — api-server
-   1. PG 응답 파싱을 use-case로 옮기기
-2. 문서 커밋·PR — knowledge
+1. 결제 응답 파싱을 use-case로 옮기고 테스트 통과시키기 — api-server
+   1. 배경: 컨트롤러에 파싱이 섞여 있어 PG를 바꿀 때마다 두 곳을 고침
+   2. 할 일: 파싱 함수를 use-case로 이동, 호출부 정리
+   3. 완료 기준: 기존 테스트 통과, 응답 필드 그대로
+2. 회의록 정리본을 커밋하고 PR 올리기 — knowledge
 \`\`\`
 1. 한 줄 = \`N. <제목> — <폴더 이름>\` (제목과 폴더 사이는 앞뒤를 한 칸씩 띄운 긴 줄표 \` — \`)
 2. 세부 메모는 3칸 들여쓴 하위 번호 목록 (없으면 생략)
@@ -74,6 +76,26 @@ export const facilitatorGuide = () => `${GUIDE_HEADER}
    1. 일지 \`## 칠판 (지금)\`에 이미 있는 할 일은 넣지 않음 (칠판에 그대로 남음)
 5. 목록에서 빼면 아직 시작 전인 할 일은 칠판에서도 지워짐
 6. \`### 칠판\` 제목은 답변마다 한 번, 답변 맨 끝에
+
+## 제목 쓰는 법
+1. 제목만 읽어도 무엇을 해서 무엇을 끝내는지 알 수 있게 씀
+   1. \`<무엇을> <어떻게> 하기\` 형태의 한 문장, 20~45자
+   2. 끝나는 모습이 드러나게 (예: "…고치고 배포하기", "…정리해 공유하기")
+2. 내부 코드·번호만으로 쓰지 않음
+   1. 항목 번호(C3, B2 같은 것), PR·이슈 번호, 커밋 해시, 파일·브랜치 이름, 사람 이름은 제목에서 빼고 세부 메모로
+   2. 코드의 뜻이 일지에 있으면 그 뜻을 제목에 씀. 뜻을 모르면 그 일의 대상과 결과로 씀
+3. 제목에는 백틱·굵게 같은 꾸밈을 쓰지 않음
+4. 예
+   1. 나쁨 "C3 해석 통일 후 커밋·PR" → 좋음 "보고서 판정 기준을 하나로 맞추고 PR 올리기"
+   2. 나쁨 "PR #12 리뷰 반영" → 좋음 "로그인 API 리뷰 코멘트를 반영해 다시 올리기"
+   3. 나쁨 "deploy.sh 수정" → 좋음 "배포 스크립트의 권한 오류 고치기"
+
+## 세부 메모 쓰는 법
+1. 새 세션이 이 메모만 보고 시작할 수 있게 씀 (칠판 [시작]이 메모를 프롬프트에 넣음)
+2. 하위 번호 목록 2~4줄
+   1. 배경: 왜 하는지, 어디까지 됐는지
+   2. 할 일: 구체적인 단계 (코드·번호·파일·브랜치 이름은 여기에)
+   3. 완료 기준: 무엇을 확인하면 끝인지
 
 ## 폴더 고르기
 1. 폴더 이름은 일지 \`## 최근 프로젝트 폴더\`의 이름(또는 절대 경로) 중 하나를 그대로 씀
@@ -89,7 +111,9 @@ const TOP_ITEM = /^\d+[.)]\s+(.+)$/;
 const SUB_ITEM = /^(?: {2,}|\t)(?:\d+[.)]|-)\s+(.+)$/;
 const isListLine = l => TOP_ITEM.test(l) || SUB_ITEM.test(l);
 // Models bold or code-quote names now and then: **제목**, `api`.
-const unwrap = s => s.trim().replace(/^(?:\*\*|`)+|(?:\*\*|`)+$/g, '').trim();
+// Titles and folders are plain text on the 칠판: every backtick / bold mark goes (a title like
+// "`name` 정리" used to keep its closing backtick when only the ends were stripped).
+const unwrap = s => s.replace(/\*\*|`/g, '').trim();
 // The last em dash splits title / folder (a title may hold one too); en dash or hyphen only without one.
 const SEPARATORS = [' — ', ' – ', ' - '];
 const splitItem = text => {

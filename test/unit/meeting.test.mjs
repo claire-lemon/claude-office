@@ -26,21 +26,21 @@ test('meetingPrompt: marker first line, note path, CLAUDE.md pointer, within the
     assert.equal(meetingIdIn(prompt), id);
 });
 
-test('facilitatorGuide v3: version header first, no CLI, the 칠판 list format and the hard rules', () => {
+test('facilitatorGuide v4: version header first, no CLI, the 칠판 list format and the hard rules', () => {
     const guide = facilitatorGuide();
-    assert.equal(GUIDE_VERSION, 3);
+    assert.equal(GUIDE_VERSION, 4);
     assert.equal(GUIDE_HEADER, `<!-- claude-office guide v${GUIDE_VERSION} -->`);
     assert.equal(guide.split('\n')[0], GUIDE_HEADER);
     // the facilitator only talks: its list is the day's todos, the server writes them
     ['bin/office.mjs', 'todo add', 'todo list', '--source', 'node '].forEach(w => assert.ok(!guide.includes(w), w));
     [
-        '### 칠판', '`N. <제목> — <폴더 이름>`', '1. 결제 모듈 리팩터링 — api-server\n   1. PG 응답 파싱을 use-case로 옮기기', '7개 이하', '우선순위',
+        '### 칠판', '`N. <제목> — <폴더 이름>`', '1. 결제 응답 파싱을 use-case로 옮기고 테스트 통과시키기 — api-server\n   1. 배경:', '7개 이하', '우선순위',
         '## 최근 프로젝트 폴더', '## 칠판 (지금)', '어제 끝낸 일', '못 끝낸 일', '오늘 추천', '조용해도', 'Bash', 'git', '웹', '레포', '볼트', '파일 쓰기',
     ].forEach(w => assert.ok(guide.includes(w), w));
     // the guide's own example parses as the list it describes
-    assert.deepEqual(boardItems(guide.slice(guide.indexOf('```markdown'))).map(i => [i.title, i.folder]), [['결제 모듈 리팩터링', 'api-server'], ['문서 커밋·PR', 'knowledge']]);
+    assert.deepEqual(boardItems(guide.slice(guide.indexOf('```markdown'))).map(i => [i.title, i.folder]), [['결제 응답 파싱을 use-case로 옮기고 테스트 통과시키기', 'api-server'], ['회의록 정리본을 커밋하고 PR 올리기', 'knowledge']]);
     assert.ok(!guide.includes('## 결재 보고'));
-    assert.ok(guide.split('\n').length <= 90);
+    assert.ok(guide.split('\n').length <= 110);
 });
 
 test('normTitle: trim, collapse spaces, lowercase, trailing . , · dropped', () => {
@@ -186,4 +186,19 @@ test('syncPlan: our open untouched items dropped from the list are removed; star
     ];
     const plan = syncPlan({ meetingId: MID, items: [item('남는 것', 'api-server')], todos, folders: FOLDERS });
     assert.deepEqual(plan, { create: [], update: [], remove: ['gone'], skipped: [] });
+});
+
+test('facilitatorGuide v4: task-first titles (no bare codes) and a detail a new session can start from', () => {
+    const guide = facilitatorGuide();
+    assert.ok(guide.includes('## 제목 쓰는 법'));
+    assert.ok(guide.includes('## 세부 메모 쓰는 법'));
+    assert.match(guide, /내부 코드·번호만으로 쓰지 않음/);
+    assert.match(guide, /나쁨 "PR #12 리뷰 반영" → 좋음 "로그인 API 리뷰 코멘트를 반영해 다시 올리기"/);
+    assert.match(guide, /완료 기준/);
+});
+
+test('boardItems: marks inside a title go too, not only a wrapping pair', () => {
+    const [a, b] = boardItems('### 칠판\n1. `name_정리` 범위만 커밋하기 — knowledge\n2. **배포** 스크립트 고치기 — `infra`');
+    assert.deepEqual([a.title, a.folder], ['name_정리 범위만 커밋하기', 'knowledge']);
+    assert.deepEqual([b.title, b.folder], ['배포 스크립트 고치기', 'infra']);
 });
