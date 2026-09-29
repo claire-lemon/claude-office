@@ -1,4 +1,4 @@
-import { $ } from '../lib/dom.js';
+import { $, escapeHtml } from '../lib/dom.js';
 import { inlineEdit } from '../lib/inline-edit.js';
 import * as api from '../api.js';
 import { safeAnimal, ANIMAL_LABELS } from '../views/sprites.js';
@@ -28,6 +28,69 @@ const diffStatHtml = session => {
 // Same lookup as views/board.js (views/ and panel/ don't import each other).
 const todoTitle = id => todos.list.find(t => t.id === id)?.title ?? '할 일';
 
+// 📋 할 일 row under the header (docs/specs/2026-09-29-finishing-touches-design.md §4.3.2): assign this
+// session to one of today's open todos, or show how it is linked. index.html has no slot: added here once.
+// The keyboard way to do what dropping a card on the blackboard does (views/board-dnd.js, same wording).
+const todoRow = Object.assign(document.createElement('div'), { id: 'panel-todo', className: 'panel-todo' });
+$('.panel-head').append(todoRow);
+const todoRowState = { html: '', id: null }; // last markup and the session it was for
+
+const todoRowHtml = session => {
+  if (session.meetingId) return ''; // a facilitator is a meeting, not work
+  if (session.todoId) {
+    const title = escapeHtml(todoTitle(session.todoId));
+    return session.todoVia === 'assigned'
+      ? `<span class="todo-tag">📋 ${title} · 배정</span><button type="button" class="panel-todo-btn" data-todo-act="unassign">해제</button>`
+      : `<span class="todo-tag">📋 ${title} · 칠판에서 시작</span>`;
+  }
+  const open = todos.list.filter(t => t.status === 'open' || t.status === 'started');
+  if (!open.length) return '';
+  return `<select class="panel-todo-select" aria-label="할 일에 배정"><option value="" disabled selected>할 일에 배정…</option>${open.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.title)}</option>`).join('')}</select>`;
+};
+
+// Not while the select has focus: a repaint would close its open list (another session always repaints).
+const renderPanelTodo = session => {
+  const picking = document.activeElement?.tagName === 'SELECT' && todoRow.contains(document.activeElement);
+  if (picking && todoRowState.id === session.id) return;
+  const html = todoRowHtml(session);
+  todoRow.hidden = !html;
+  todoRowState.id = session.id;
+  if (html === todoRowState.html) return;
+  todoRow.innerHTML = html;
+  todoRowState.html = html;
+};
+
+// No optimistic state: the poll right after brings the session's todoId / todoVia from the server.
+const linkTodo = async (todoId, body, okMsg, failFor) => {
+  const keyboard = todoRow.contains(document.activeElement);
+  todoRow.querySelectorAll('select, button').forEach(el => { el.disabled = true; });
+  try {
+    const res = await api.patchTodo(todoId, body);
+    const data = await res.json().catch(() => ({}));
+    flashPanelError(res.ok && data.ok ? okMsg : failFor(res.status));
+  } catch {
+    flashPanelError(failFor(0));
+  }
+  if (todoRow.contains(document.activeElement)) document.activeElement.blur();
+  todoRowState.html = ''; // repaint even if the answer is the same markup: the controls are disabled
+  await controls.poll();
+  const session = state.sessionsById.get(selected.id);
+  if (session) renderPanelTodo(session); // no-op after a good poll; brings the controls back after a failed one
+  if (keyboard) todoRow.querySelector('select, button')?.focus();
+};
+
+todoRow.addEventListener('change', e => {
+  const todoId = e.target.matches('.panel-todo-select') && e.target.value;
+  if (!todoId || !selected.id) return;
+  linkTodo(todoId, { assign: selected.id }, `📋 ${todoTitle(todoId)}에 배정했어요`,
+    status => (status === 409 ? '칠판에서 시작한 세션이라 옮길 수 없어요' : '배정하지 못했어요'));
+});
+todoRow.addEventListener('click', e => {
+  const session = e.target.closest('[data-todo-act="unassign"]') && state.sessionsById.get(selected.id);
+  if (!session?.todoId) return;
+  linkTodo(session.todoId, { unassign: session.id }, '배정을 해제했어요', () => '배정을 해제하지 못했어요');
+});
+
 // Name: shown as text, click/Enter/F2 turns it into an input (§5.5). Every 2s poll re-renders
 // the header, so the name is left alone while an edit is open.
 const nameEl = $('#panel-name');
@@ -46,7 +109,7 @@ const renderPanelHeader = session => {
   const prLabel = (session.prs && session.prs.length) ? prStateLabel(session.prs[0].state) : '-';
   const sub = $('#panel-sub');
   sub.textContent = `${ANIMAL_LABELS[safeAnimal(session.animal)]} · ${session.branch || '-'} · PR ${prLabel} · ${session.turns ?? '-'}턴`;
-  if (session.todoId) sub.append(' · ', Object.assign(document.createElement('span'), { className: 'todo-tag', textContent: `📋 ${todoTitle(session.todoId)}` }));
+  // 📋 has its own row now (renderPanelTodo)
   if (session.meetingId) sub.append(' · ', Object.assign(document.createElement('span'), { className: 'todo-tag', textContent: '🏫 회의' }));
   const loc = $('#panel-loc');
   loc.replaceChildren(...[
@@ -64,6 +127,7 @@ const renderPanelHeader = session => {
   const dsHtml = diffStatHtml(session);
   dsEl.innerHTML = dsHtml;
   dsEl.classList.toggle('hidden', !dsHtml);
+  renderPanelTodo(session);
 };
 
 const openPanel = () => { $('#panel').classList.add('open'); $('#panel').setAttribute('aria-hidden','false'); document.body.classList.add('panel-open'); };

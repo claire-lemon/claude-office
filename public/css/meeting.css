@@ -34,6 +34,18 @@
   .mt-stage[data-status="review"] .char-group,.mt-stage[data-status="question"] .char-group{animation:bob-slow 1.4s ease-in-out infinite;}
   .mt-stage[data-status="blocked"] .char-group{animation:tremble .3s ease-in-out infinite;}
 
+  /* 진행자 | 📓 업무일지 tabs over the message (views/meeting.js, finishing-touches design §2.2) */
+  .mt-tabs{display:flex; gap:4px; margin-bottom:-6px; border-bottom:1px solid var(--line);}
+  .mt-tab{background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px; padding:6px 10px; font-size:13px; color:var(--muted);}
+  .mt-tab[aria-selected="true"]{color:var(--ink); border-color:var(--accent); font-weight:700;}
+  .mt-tab:hover{color:var(--ink);}
+  .mt-msg .report-sec + .mt-status{margin-top:8px; padding-top:8px; border-top:1px dashed var(--line);}
+  .mt-err{margin:4px 0 0; font-size:12px; color:var(--bad); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .mt-hint{margin:-4px 0 0; line-height:1.5;}
+  .mt-hint[hidden]{display:none;}
+  .mt-link{background:none; border:none; padding:0; font:inherit; color:var(--accent); text-decoration:underline; cursor:pointer;}
+  .mt-link:disabled{opacity:.6; cursor:default;}
+
   .mt-msg{flex:1 1 auto; min-height:80px; overflow-y:auto; padding:10px 12px; background:var(--bg-panel); border:1px solid var(--line); border-radius:12px;}
   .mt-msg .report-sec{margin:0;}
   .mt-msg .hint{margin:0; line-height:1.5;}

@@ -15,17 +15,28 @@ const NO_REPLY = '진행자가 아직 답하지 않았어요. 대화는 앱 채�
 // Bubble per facilitator status; anything else (stale, unknown) = away.
 const BUBBLE = { working: '정리 중…', review: '답을 기다려요', question: '답을 기다려요', blocked: '답을 기다려요', hold: '보류', archived: '회의 끝', done: '회의 끝' };
 
+// 진행자 | 📓 업무일지 (finishing-touches design §2.2). Not saved: a reload starts on 진행자.
+const TABS = [['host', '진행자'], ['note', '📓 업무일지']];
+// A poll already in flight when 업무일지 쓰기 answers still says running:false; that long after our
+// own start, a running:false is not taken as "finished".
+const SETTLE_MS = 1500;
+
 // meeting: GET /api/meeting (or null before the first answer), todos: store.todos.
 const view = { el: null, onChange: () => {}, meeting: null, todos: { list: [] } };
-const ui = { busy: null }; // the action whose request is in flight: every button waits for it
+// busy: the action whose request is in flight (every button waits for it). tab: TABS id.
+// watch: ms since a narration is watched to toast its end once (0 = none).
+const ui = { busy: null, tab: 'host', watch: 0 };
 const refs = {};
 const painted = {}; // part -> last html; unchanged = DOM left alone (animations, scroll, selection)
 
 const SHELL = `
   <div class="mt-head"><h2 class="mt-title">🏫 회의실</h2><span class="mt-sub hint"></span></div>
   <div class="mt-stage"></div>
-  <div class="mt-msg"></div>
+  <div class="mt-tabs" role="tablist" aria-label="회의실 보기">${TABS.map(([id, label]) =>
+    `<button type="button" role="tab" class="mt-tab" id="mt-tab-${id}" data-tab="${id}" aria-controls="mt-msg">${label}</button>`).join('')}</div>
+  <div class="mt-msg" id="mt-msg" role="tabpanel"></div>
   <div class="mt-btns"></div>
+  <p class="mt-hint hint" hidden></p>
   <button type="button" class="mt-note" data-act="copy-note" title="클릭해서 경로 복사"></button>`;
 
 // ---------- parts ----------
@@ -63,6 +74,29 @@ const buttonsFor = m => {
 const buttonsHtml = m => buttonsFor(m).map(([act, label], i, all) =>
   `<button type="button" class="mt-btn${i === all.length - 1 ? ' mt-primary' : ''}" data-act="${act}"${ui.busy ? ' disabled' : ''}>${escapeHtml(label)}</button>`).join('');
 
+// 업무일지 tab (design §2.2.2): the note's AI narrative, then a status line (+ the error while failed).
+const hhmm = ms => new Date(ms).toTimeString().slice(0, 5);
+const narrStatus = n => {
+  if (n.running) return `업무일지 쓰는 중…${n.startedAt ? ` (시작 ${hhmm(n.startedAt)})` : ''}`;
+  if (n.exists) return n.writtenAt ? `${hhmm(n.writtenAt)} 작성` : '작성됨';
+  return '오늘 업무일지가 아직 없어요 · 어제 세션을 AI가 1~2분에 걸쳐 정리해요';
+};
+const narrativeHtml = n => {
+  if (!n) return '<p class="hint">불러오는 중…</p>';
+  const body = n.text ? `<div class="report-sec">${renderMarkdown(n.text)}</div>` : '';
+  const err = !n.running && n.error ? `<p class="mt-err" title="${escapeHtml(n.error)}">${escapeHtml(n.error)}</p>` : '';
+  return `${body}<p class="hint mt-status">${escapeHtml(narrStatus(n))}</p>${err}`;
+};
+const narrateBtnHtml = n => (n
+  ? `<button type="button" class="mt-btn mt-primary" data-act="narrate"${ui.busy || n.running ? ' disabled' : ''}>${n.exists ? '다시 쓰기' : '지금 쓰기'}</button>`
+  : '');
+// 진행자 tab, beside 회의 시작 (design §2.2.3): a nudge, never a gate.
+const hintHtml = m => {
+  const n = m?.narrative;
+  if (!n || n.exists || n.running || buttonsFor(m).at(-1)[0] !== 'start') return '';
+  return `업무일지를 먼저 쓰면 진행자가 어제 흐름까지 보고 정리해요 · <button type="button" class="mt-link" data-act="narrate"${ui.busy ? ' disabled' : ''}>업무일지 쓰기</button>`;
+};
+
 // Display only: the home folder as ~ (the copy keeps the full path).
 const tildePath = p => String(p).replace(/^\/(Users|home)\/[^/]+/, '~');
 const noteHtml = m => (m?.note?.path
@@ -90,20 +124,26 @@ const paint = (part, html) => {
 const draw = () => {
   const m = view.meeting;
   const key = stageKey(m);
+  const onNote = ui.tab === 'note';
   refs.stage.dataset.status = key;
   refs.sub.textContent = subText(m, view.todos);
+  refs.tabs.forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === ui.tab)));
+  refs.msg.setAttribute('aria-labelledby', `mt-tab-${ui.tab}`);
   paint('stage', stageHtml(m, key));
-  paint('msg', msgHtml(m));
-  paint('btns', buttonsHtml(m));
+  paint('msg', onNote ? narrativeHtml(m?.narrative) : msgHtml(m));
+  paint('btns', onNote ? narrateBtnHtml(m?.narrative) : buttonsHtml(m));
+  paint('hint', onNote ? '' : hintHtml(m));
+  refs.hint.hidden = !painted.hint;
   paint('note', noteHtml(m));
   refs.note.hidden = !m?.note?.path;
 };
 
 // ---------- actions ----------
-const FAIL = { start: '회의를 열지 못했어요', open: '채팅방을 열지 못했어요', end: '회의를 끝내지 못했어요', 'copy-note': '복사하지 못했어요' };
+const FAIL = { start: '회의를 열지 못했어요', open: '채팅방을 열지 못했어요', end: '회의를 끝내지 못했어요', 'copy-note': '복사하지 못했어요', narrate: '업무일지를 쓰지 못했어요' };
 const ensureOk = async res => {
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data.error) throw new Error(data.error);
+  return data;
 };
 
 // toast.js stampFx draws in #stamp-layer, which sits in the panel: while the panel is closed (its
@@ -137,6 +177,24 @@ const ACTIONS = {
     await navigator.clipboard.writeText(p);
     flashPanelError('경로 복사됨');
   },
+  // Runs in the server's background (1~2 min); shown as running now, the poll takes it from here.
+  narrate: async () => {
+    const data = await ensureOk(await api.postMeetingNarrate());
+    ui.watch = Date.now();
+    const n = view.meeting?.narrative;
+    if (n && !n.running) view.meeting.narrative = { ...n, running: true, startedAt: Date.now(), error: null };
+    flashPanelError(data.already ? '이미 쓰는 중이에요' : '업무일지를 쓰기 시작했어요 · 1~2분 걸려요', 4000);
+  },
+};
+
+// One toast when a narration ends: one started here, or one a poll saw running (the 05시 timer).
+// The tab is left as it is.
+const watchNarration = n => {
+  if (!n) return;
+  if (n.running) { ui.watch ||= Date.now() - SETTLE_MS; return; }
+  if (!ui.watch || Date.now() - ui.watch < SETTLE_MS) return;
+  ui.watch = 0;
+  flashPanelError(n.error ? '업무일지를 쓰지 못했어요' : '업무일지를 썼어요');
 };
 
 const run = async act => {
@@ -150,6 +208,13 @@ const run = async act => {
 };
 
 const onClick = e => {
+  const tab = e.target.closest('[role="tab"]');
+  if (tab) {
+    ui.tab = tab.dataset.tab;
+    window.getSelection()?.removeAllRanges(); // paint keeps a selected message; a tab switch replaces it
+    draw();
+    return;
+  }
   const btn = e.target.closest('[data-act]');
   if (!btn || btn.disabled || !Object.hasOwn(ACTIONS, btn.dataset.act)) return;
   run(btn.dataset.act);
@@ -164,8 +229,10 @@ export const mountMeeting = (el, { onChange = () => {} } = {}) => {
   el.innerHTML = SHELL;
   refs.sub = el.querySelector('.mt-sub');
   refs.stage = el.querySelector('.mt-stage');
+  refs.tabs = Array.from(el.querySelectorAll('[role="tab"]'));
   refs.msg = el.querySelector('.mt-msg');
   refs.btns = el.querySelector('.mt-btns');
+  refs.hint = el.querySelector('.mt-hint');
   refs.note = el.querySelector('.mt-note');
   el.addEventListener('click', onClick);
   draw();
@@ -176,6 +243,7 @@ export const renderMeeting = (meeting, todos) => {
   if (!view.el) return;
   view.meeting = meeting;
   view.todos = todos || { list: [] };
+  watchNarration(meeting?.narrative);
   draw();
 };
 

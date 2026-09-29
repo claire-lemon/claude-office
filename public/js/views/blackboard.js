@@ -1,7 +1,7 @@
 import { escapeHtml } from '../lib/dom.js';
 import { inlineEdit } from '../lib/inline-edit.js';
 import * as api from '../api.js';
-import { controls } from '../store.js';
+import { controls, drag } from '../store.js';
 import { safeAnimal } from './sprites.js';
 import { COLUMNS } from './columns.js';
 import { flashPanelError } from './toast.js';
@@ -21,12 +21,16 @@ const ADD_ERRORS = {
   'folder not found': '폴더를 찾지 못했어요',
 };
 const START_ERRORS = { 'repo folder not found': '레포 폴더를 찾지 못했어요' };
+// Chip tooltip: how the session came to this todo (finishing-touches design §4.3.3).
+const VIA_LABEL = { assigned: ' · 배정됨', marker: ' · 칠판에서 시작' };
 
 // data: store.todos ({ list, deleted, folders }); optimistic updates write into it, the poll replaces it.
 const view = { el: null, data: { list: [], deleted: [], folders: [] }, sessionsById: new Map(), onChange: () => {} };
 // adding: add form open (renders never touch it). memo: ids with the detail textarea open.
 // starting: ids waiting on POST /api/start. history: ids with the earlier-sessions list open (design §3.5).
-const ui = { adding: false, memo: new Set(), starting: new Set(), history: new Set() };
+// refining: ids waiting on POST /api/refine. proposal: id -> ✨ proposed detail shown in place of the memo;
+// an item with one open is left alone by renders, like one being edited (finishing-touches design §3.2).
+const ui = { adding: false, memo: new Set(), starting: new Set(), history: new Set(), refining: new Set(), proposal: new Map() };
 const itemEls = new Map(); // todo id -> { el, html }: html is the last markup, unchanged = DOM left alone
 const refs = { trashHtml: '' };
 
@@ -51,9 +55,10 @@ const chipLabel = s => OFF_BOARD_LABEL[s.status] ?? COLUMN_LABEL[s.column] ?? OF
 // Linked session: animal face (+ label html) + status chip. Only a session on the board has a panel to open.
 const workerHtml = (s, label = '') => {
   const inner = `<svg viewBox="0 0 24 34" aria-hidden="true"><use href="#animal-${safeAnimal(s.animal)}"></use></svg>${label}<span class="bb-chip" data-state="${escapeHtml(chipState(s))}">${escapeHtml(chipLabel(s))}</span>`;
+  const title = escapeHtml(`${s.title}${VIA_LABEL[s.via] ?? ''}`);
   return view.sessionsById.has(s.id)
-    ? `<button type="button" class="bb-worker" data-act="worker" data-session="${escapeHtml(s.id)}" title="${escapeHtml(s.title)} · 패널 열기">${inner}</button>`
-    : `<span class="bb-worker" title="${escapeHtml(s.title)}">${inner}</span>`;
+    ? `<button type="button" class="bb-worker" data-act="worker" data-session="${escapeHtml(s.id)}" title="${title} · 패널 열기">${inner}</button>`
+    : `<span class="bb-worker" title="${title}">${inner}</span>`;
 };
 
 const pad2 = n => String(n).padStart(2, '0');
@@ -62,10 +67,25 @@ const stamp = ms => {
   const d = new Date(ms);
   return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 };
-// One earlier session: face · title · chip (one button while on the board) · MM-DD HH:MM.
-const histHtml = s => `<li>${workerHtml(s, `<span class="bb-hist-title">${escapeHtml(s.title)}</span>`)}<span class="bb-hist-at">${stamp(s.decidedAt ?? s.lastAt)}</span></li>`;
+// One earlier session: face · title · chip (one button while on the board) · MM-DD HH:MM (· × if assigned).
+const unassignHtml = s => (s.via === 'assigned'
+  ? `<button type="button" class="bb-icon bb-unassign" data-act="unassign" data-session="${escapeHtml(s.id)}" aria-label="배정 해제: ${escapeHtml(s.title)}" title="배정 해제">×</button>`
+  : '');
+const histHtml = s => `<li>${workerHtml(s, `<span class="bb-hist-title">${escapeHtml(s.title)}</span>`)}<span class="bb-hist-at">${stamp(s.decidedAt ?? s.lastAt)}</span>${unassignHtml(s)}</li>`;
 
 const startLabel = t => (ui.starting.has(t.id) ? '여는 중…' : t.status === 'started' ? '다시 시작' : '시작');
+
+// Memo area: the textarea, and ✨ 다듬기 under it while the todo is not done.
+const memoHtml = (t, done) => {
+  const busy = ui.refining.has(t.id);
+  const refine = done ? '' : `<div class="bb-memo-bar"><button type="button" class="bb-btn" data-act="refine"${busy ? ' disabled title="최대 1분쯤 걸려요"' : ''}>${busy ? '다듬는 중…' : '✨ 다듬기'}</button></div>`;
+  return `<textarea class="bb-detail" maxlength="2000" rows="3" placeholder="세부 메모 · 새 세션 프롬프트에 들어가요" aria-label="세부 메모"></textarea>${refine}`;
+};
+// Not .bb-detail: a blur here must not save the proposal as the memo (only 적용 does).
+const PROPOSAL_HTML = `<div class="bb-prop">
+      <div class="bb-prop-bar"><span class="bb-prop-badge">✨ AI 제안</span><button type="button" class="bb-btn bb-ghost" data-act="refine-cancel">취소</button><button type="button" class="bb-btn" data-act="refine-apply">적용</button></div>
+      <textarea class="bb-refine" maxlength="2000" rows="8" aria-label="AI 제안 메모 · 고쳐서 적용할 수 있어요 · ⌘Enter 적용, Esc 취소"></textarea>
+    </div>`;
 
 // Structure only. Title and detail are filled by paintItem as properties, so saving them on blur
 // never rebuilds the item under the pointer (the click that caused the blur would be lost).
@@ -88,15 +108,19 @@ const itemHtml = t => {
       ${start}
     </div>
     ${histOpen ? `<ol class="bb-hist" aria-label="이전 세션">${earlier.map(histHtml).join('')}</ol>` : ''}
-    ${memoOpen ? '<textarea class="bb-detail" maxlength="2000" rows="3" placeholder="세부 메모 · 새 세션 프롬프트에 들어가요" aria-label="세부 메모"></textarea>' : ''}`;
+    ${ui.proposal.has(t.id) ? PROPOSAL_HTML : memoOpen ? memoHtml(t, done) : ''}`;
 };
 
 const isEditing = el => !!el.querySelector('[data-editing]');
+const frozen = (id, el) => isEditing(el) || ui.proposal.has(id);
 
 const paintItem = (entry, t) => {
   const { el } = entry;
   el.classList.toggle('done', t.status === 'done');
   el.dataset.status = t.status;
+  // a 결재함 card dropped here is assigned to this todo (views/board-dnd.js)
+  if (t.status === 'done') delete el.dataset.dropTodo;
+  else el.dataset.dropTodo = t.id;
   const html = itemHtml(t);
   if (html !== entry.html) {
     const { act, session } = el.contains(document.activeElement) ? document.activeElement.dataset : {};
@@ -112,6 +136,8 @@ const paintItem = (entry, t) => {
   memo.title = t.detail || '메모 추가';
   const area = el.querySelector('.bb-detail');
   if (area) area.value = t.detail || '';
+  const prop = el.querySelector('.bb-refine');
+  if (prop) prop.value = ui.proposal.get(t.id); // painted once, when it opens: then the item is frozen
 };
 
 const drawDeleted = () => {
@@ -134,14 +160,14 @@ const draw = () => {
   refs.empty.hidden = items.length > 0;
   const ids = new Set(items.map(t => t.id));
   itemEls.forEach((entry, id) => {
-    if (ids.has(id) || isEditing(entry.el)) return;
+    if (ids.has(id) || frozen(id, entry.el)) return;
     entry.el.remove();
     itemEls.delete(id);
   });
   items.forEach((t, i) => {
     const entry = itemEls.get(t.id) ?? { el: Object.assign(document.createElement('li'), { className: 'bb-item' }), html: '' };
     if (!itemEls.has(t.id)) { entry.el.dataset.todo = t.id; itemEls.set(t.id, entry); }
-    if (!isEditing(entry.el)) paintItem(entry, t);
+    if (!frozen(t.id, entry.el)) paintItem(entry, t);
     if (refs.list.children[i] !== entry.el) refs.list.insertBefore(entry.el, refs.list.children[i] ?? null);
   });
   drawDeleted();
@@ -152,7 +178,7 @@ const findTodo = id => view.data.list.find(t => t.id === id);
 const putTodo = (id, next) => { view.data.list = view.data.list.map(t => (t.id === id ? next : t)); };
 
 // Optimistic edit: show `local` now, send `body`, then adopt the server's todo or roll back.
-const mutate = async (id, local, body, failMsg) => {
+const mutate = async (id, local, body, failMsg, okMsg = '') => {
   const prev = findTodo(id);
   if (!prev) return;
   putTodo(id, { ...prev, ...local });
@@ -162,6 +188,7 @@ const mutate = async (id, local, body, failMsg) => {
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) throw new Error(data.error);
     if (data.todo) putTodo(id, data.todo);
+    if (okMsg) flashPanelError(okMsg);
   } catch {
     putTodo(id, prev);
     flashPanelError(failMsg);
@@ -210,6 +237,52 @@ const saveDetail = (id, area) => {
   const detail = area.value.trim();
   if (!t || detail === (t.detail || '')) return;
   mutate(id, { detail }, { detail }, '메모를 저장하지 못했어요');
+};
+
+// ✨ 다듬기 (finishing-touches design §3.2): the server writes a proposed detail from the todo, its
+// sessions and today's narrative. Nothing is saved until 적용; 취소 leaves the memo as it was.
+const refine = async id => {
+  if (ui.refining.has(id)) return;
+  ui.refining.add(id);
+  draw();
+  const res = await api.postRefine(id).catch(() => null);
+  const data = res ? await res.json().catch(() => ({})) : {};
+  ui.refining.delete(id);
+  if (res?.ok && typeof data.detail === 'string') openProposal(id, data.detail);
+  else flashPanelError(res?.status === 404 ? '할 일을 찾지 못했어요' : '다듬지 못했어요');
+  draw();
+};
+
+const openProposal = (id, detail) => {
+  const entry = itemEls.get(id);
+  if (!entry || !findTodo(id)) return;
+  if (entry.el.contains(document.activeElement)) document.activeElement.blur(); // a memo / title being typed saves first
+  ui.proposal.set(id, detail);
+  paintItem(entry, findTodo(id));
+  entry.el.querySelector('.bb-refine')?.focus();
+};
+
+const closeProposal = id => {
+  ui.proposal.delete(id);
+  draw();
+  itemEls.get(id)?.el.querySelector('.bb-memo')?.focus();
+};
+
+// The existing memo save path; the memo opens so what was saved is in view.
+const applyProposal = id => {
+  const detail = itemEls.get(id)?.el.querySelector('.bb-refine')?.value.trim() ?? '';
+  ui.memo.add(id);
+  closeProposal(id);
+  const t = findTodo(id);
+  if (t && detail !== (t.detail || '')) mutate(id, { detail }, { detail }, '메모를 저장하지 못했어요');
+};
+
+// [×] on an assigned session in the +n list (design §4.3.3). Only earlier sessions get one, so `latest` holds.
+const unassign = (id, sessionId) => {
+  const t = findTodo(id);
+  if (!t || !sessionId) return;
+  const sessions = (t.sessions || []).filter(s => s.id !== sessionId);
+  mutate(id, { sessions, latest: sessions[0] ?? null }, { unassign: sessionId }, '배정을 해제하지 못했어요', '배정을 해제했어요');
 };
 
 // flashPanelError renders text only; this toast carries a 되돌리기 button (same .toast look).
@@ -341,6 +414,10 @@ const ACTIONS = {
   restore: id => restore(id),
   'edit-detail': toggleMemo,
   history: toggleHistory,
+  refine,
+  'refine-apply': applyProposal,
+  'refine-cancel': closeProposal,
+  unassign: (id, btn) => unassign(id, btn.dataset.session),
   title: editTitle,
   worker: (id, btn) => controls.selectSession(btn.dataset.session),
   add: openForm,
@@ -363,6 +440,13 @@ const onKeydown = e => {
   const id = t.closest('[data-todo]')?.dataset.todo;
   const inForm = !!t.closest('.bb-form');
   const inMemo = t.matches('.bb-detail');
+  const inProposal = !!t.closest('.bb-prop');
+  if (e.key === 'Escape' && inProposal) {
+    e.preventDefault();
+    e.stopPropagation(); // not also the panel / meeting screen (main.js)
+    closeProposal(id);
+    return;
+  }
   if (e.key === 'Escape' && (inForm || inMemo)) {
     e.preventDefault();
     e.stopPropagation(); // main.js closes the panel on a document-level Escape
@@ -375,6 +459,7 @@ const onKeydown = e => {
   if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return; // Korean IME: this Enter confirms a syllable
   const mod = e.metaKey || e.ctrlKey;
   if (inMemo && mod) { e.preventDefault(); t.blur(); return; }
+  if (inProposal && mod && t.matches('.bb-refine')) { e.preventDefault(); applyProposal(id); return; }
   if (inForm && (t.tagName === 'INPUT' || (t.tagName === 'TEXTAREA' && mod))) { e.preventDefault(); saveForm(); }
 };
 
@@ -410,9 +495,10 @@ export const mountBlackboard = (el, { onChange = () => {} } = {}) => {
 };
 
 // data: store.todos ({ list, deleted, folders }). The add form is never touched here.
+// Not while a card is dragged: board-dnd.js marks the items as drop targets; the poll after dragend repaints.
 export const renderBlackboard = (data, sessionsById) => {
   if (!view.el) return;
   view.data = data;
   view.sessionsById = sessionsById;
-  draw();
+  if (!drag.id) draw();
 };

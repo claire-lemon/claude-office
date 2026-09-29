@@ -26,7 +26,11 @@ export const postTodo = body => fetch('/api/todos', jsonInit('POST', body));
 export const patchTodo = (id, body) => fetch(`/api/todos/${encodeURIComponent(id)}`, jsonInit('POST', body));
 export const deleteTodo = id => fetch(`/api/todos/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const postStart = id => fetch(`/api/start/${encodeURIComponent(id)}`, { method: 'POST' });
+// ✨ 다듬기: a proposed detail, never saved by this call (docs/specs/2026-09-29-finishing-touches-design.md §3).
+export const postRefine = id => fetch(`/api/refine/${encodeURIComponent(id)}`, { method: 'POST' });
 // 회의실 (docs/specs/2026-09-29-meeting-room-design.md §5).
 export const getMeeting = () => fetch('/api/meeting', { cache: 'no-store' });
 export const postMeetingStart = () => fetch('/api/meeting/start', { method: 'POST' });
 export const postMeetingEnd = () => fetch('/api/meeting/end', { method: 'POST' });
+// 업무일지 AI 서술: 202 at once, the meeting poll shows its progress (finishing-touches design §2).
+export const postMeetingNarrate = () => fetch('/api/meeting/narrate', { method: 'POST' });
