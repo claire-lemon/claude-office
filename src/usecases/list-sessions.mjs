@@ -70,6 +70,10 @@ export const transcriptOf = ({ cli, state, app }) => {
     return state?.transcriptPath || (cwd ? transcriptPathFor(cwd, cli) : '');
 };
 
+// Whether hooks/report.mjs has ever written a state file. False while app sessions exist = install.mjs never
+// ran (or the hook fails); the header shows the install hint then.
+export const hooksInstalled = () => loadStates().length > 0;
+
 export const listSessions = (now = Date.now()) => {
     const apps = loadAppSessions();
     const states = loadStates();

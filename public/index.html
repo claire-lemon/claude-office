@@ -16,10 +16,12 @@
 <body>
 <header class="topbar">
   <h1>오늘의 사무실</h1>
+  <span id="freshness" class="freshness">연결 중…</span><!-- views/freshness.js -->
   <div class="counters" role="group" aria-label="필터"></div><!-- buttons from views/filters.js FILTERS -->
   <button id="archive-open" class="icon-btn archive-btn" type="button" title="보관함" data-drop="archive">🗄️ 보관함</button>
   <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" title="알림 소리">🔔</button>
 </header>
+<p class="notice" id="notice-hooks" hidden>hook 기록이 아직 하나도 없어서 사원 상태(작업 중·보고·막힘)를 알 수 없어요. claude-office 폴더에서 <code>node install.mjs</code>를 실행한 뒤, 세션에서 메시지를 한 번 보내 보세요.</p>
 <div class="stage">
   <div class="main-col">
     <section class="office" aria-label="사무실">

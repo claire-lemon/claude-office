@@ -7,6 +7,7 @@ import * as board from './views/board.js';
 import { mountBoardDnd } from './views/board-dnd.js';
 import { filterById, mountFilters, updateCounters } from './views/filters.js';
 import * as notify from './views/notify.js';
+import { health, renderFreshness, renderHookBanner } from './views/freshness.js';
 import * as archive from './views/archive.js';
 import { mountBlackboard, renderBlackboard } from './views/blackboard.js';
 import { mountMeeting, renderMeeting, setScreen } from './views/meeting.js';
@@ -88,15 +89,21 @@ const loadMeeting = async () => {
   } catch {}
 };
 
+// A failed /api/sessions keeps the last screen but flips the header badge to 오프라인.
 const poll = async () => {
   const [res] = await Promise.all([api.getSessions().catch(() => null), loadTodos(), loadMeeting()]);
   try {
-    if (res && res.ok) {
-      const data = await res.json();
-      applySessions(Array.isArray(data.sessions) ? data.sessions : []);
-      openFromUrl();
-    }
-  } catch {}
+    if (!res || !res.ok) throw new Error('poll failed');
+    const data = await res.json();
+    const list = Array.isArray(data.sessions) ? data.sessions : [];
+    Object.assign(health, { okAt: Date.now(), failed: false, hooksInstalled: data.hooksInstalled !== false, sessions: list.length });
+    applySessions(list);
+    openFromUrl();
+  } catch {
+    health.failed = true;
+  }
+  renderFreshness();
+  renderHookBanner();
   renderBlackboard(todos, state.sessionsById); // after sessions: a linked worker is clickable only while on the board
   if (view.screen === 'meeting') renderMeeting(meeting.data, todos);
 };
@@ -124,4 +131,5 @@ window.addEventListener('hashchange', () => { screenFromHash(); poll(); }); // t
 office.updateWindow();
 poll();
 setInterval(poll, 2000);
+setInterval(renderFreshness, 1000);
 setInterval(office.updateWindow, 30000);
