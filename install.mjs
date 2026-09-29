@@ -15,7 +15,8 @@ const uninstall = process.argv.includes('--uninstall');
 const settings = fs.existsSync(SETTINGS) ? JSON.parse(fs.readFileSync(SETTINGS, 'utf8')) : {};
 if (fs.existsSync(SETTINGS)) fs.copyFileSync(SETTINGS, `${SETTINGS}.bak-office-${Date.now()}`);
 
-const isOurs = group => (group.hooks || []).some(h => String(h.command || '').includes(MARK));
+// MARK for installs from the usual checkout; HOOK for one from any other folder (a worktree, a renamed clone).
+const isOurs = group => (group.hooks || []).some(h => [MARK, HOOK].some(m => String(h.command || '').includes(m)));
 const stripped = Object.fromEntries(
     Object.entries(settings.hooks || {})
         .map(([event, groups]) => [event, groups.filter(g => !isOurs(g))])
