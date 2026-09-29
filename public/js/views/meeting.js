@@ -29,8 +29,13 @@ const ui = { busy: null, tab: 'host', watch: 0 };
 const refs = {};
 const painted = {}; // part -> last html; unchanged = DOM left alone (animations, scroll, selection)
 
+// Same drawing as the office's door (index.html); main.js handles [data-screen].
+const EXIT_DOOR = `<button type="button" class="door door-exit" data-screen="office" title="사무실로 나가기">
+    <svg class="door-svg" viewBox="0 0 32 48" aria-hidden="true"><rect x="0" y="0" width="32" height="48" class="door-frame"/><rect x="3" y="3" width="26" height="45" class="door-gap"/><g class="door-leaf"><rect x="3" y="3" width="26" height="45" class="door-wood"/><rect x="7.5" y="7.5" width="17" height="14" class="door-panel"/><rect x="7.5" y="27.5" width="17" height="16" class="door-panel"/><rect x="22" y="23" width="3" height="3" class="door-knob"/></g></svg>
+    <span class="door-sign">나가기</span></button>`;
+
 const SHELL = `
-  <div class="mt-head"><h2 class="mt-title">🏫 회의실</h2><span class="mt-sub hint"></span></div>
+  <div class="mt-head"><h2 class="mt-title">🏫 회의실</h2><span class="mt-sub hint"></span>${EXIT_DOOR}</div>
   <div class="mt-stage"></div>
   <div class="mt-tabs" role="tablist" aria-label="회의실 보기">${TABS.map(([id, label]) =>
     `<button type="button" role="tab" class="mt-tab" id="mt-tab-${id}" data-tab="${id}" aria-controls="mt-msg">${label}</button>`).join('')}</div>
@@ -262,15 +267,14 @@ export const renderMeeting = (meeting, todos) => {
   draw();
 };
 
-// The one place that switches screens: body class (meeting.css), the panel's hidden attr, the header
-// button, and the URL hash (a reload with #meeting comes back here). replaceState: no history entry
+// The one place that switches screens: body class (meeting.css), the panel's hidden attr, and the URL
+// hash (a reload with #meeting comes back here). replaceState: no history entry
 // per toggle and no trailing '#'. The caller polls afterwards so the meeting data comes right away.
 export const setScreen = screen => {
   const on = screen === 'meeting';
   appView.screen = on ? 'meeting' : 'office';
   document.body.classList.toggle('screen-meeting', on);
   if (view.el) view.el.hidden = !on;
-  document.getElementById('meeting-open')?.setAttribute('aria-pressed', String(on));
   if (on !== (location.hash === '#meeting')) history.replaceState(null, '', on ? '#meeting' : location.pathname + location.search);
   if (on) renderMeeting(meetingStore.data, todoStore);
   refitOffice(); // the desks come back at a new size

@@ -73,6 +73,19 @@ const unassignHtml = s => (s.via === 'assigned'
   : '');
 const histHtml = s => `<li>${workerHtml(s, `<span class="bb-hist-title">${escapeHtml(s.title)}</span>`)}<span class="bb-hist-at">${stamp(s.decidedAt ?? s.lastAt)}</span>${unassignHtml(s)}</li>`;
 
+// 👤 배정: the todo picks its session, like an issue's assignee. Board sessions not linked here yet;
+// never a facilitator, nor one started from another todo (the server won't move a marker link: 409).
+const assignable = t => {
+  const linked = new Set((t.sessions || []).map(s => s.id));
+  return [...view.sessionsById.values()].filter(s => !linked.has(s.id) && !s.meetingId && s.todoVia !== 'marker');
+};
+const assignHtml = t => {
+  const list = assignable(t);
+  if (!list.length) return '';
+  const options = list.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.title)} · ${escapeHtml(COLUMN_LABEL[s.column] ?? '')}</option>`).join('');
+  return `<select class="bb-btn bb-assign" data-act="assign" aria-label="세션 배정: ${escapeHtml(t.title)}" title="결재함의 세션을 이 할 일에 배정"><option value="" selected disabled>👤 배정</option>${options}</select>`;
+};
+
 const startLabel = t => (ui.starting.has(t.id) ? '여는 중…' : t.status === 'started' ? '다시 시작' : '시작');
 
 // Memo area: the textarea, and ✨ 다듬기 under it while the todo is not done.
@@ -105,7 +118,7 @@ const itemHtml = t => {
     <div class="bb-meta">
       <span class="bb-proj" title="${escapeHtml(t.folder)}">📁 ${escapeHtml(t.project || '-')}</span>
       ${t.latest ? workerHtml(t.latest) : ''}${more}
-      ${start}
+      ${done ? '' : assignHtml(t)}${start}
     </div>
     ${histOpen ? `<ol class="bb-hist" aria-label="이전 세션">${earlier.map(histHtml).join('')}</ol>` : ''}
     ${ui.proposal.has(t.id) ? PROPOSAL_HTML : memoOpen ? memoHtml(t, done) : ''}`;
@@ -275,6 +288,16 @@ const applyProposal = id => {
   closeProposal(id);
   const t = findTodo(id);
   if (t && detail !== (t.detail || '')) mutate(id, { detail }, { detail }, '메모를 저장하지 못했어요');
+};
+
+// The select goes back to 👤 배정 at once; the server's todo (with the new chip) comes in the answer.
+const assign = (id, select) => {
+  const sessionId = select.value;
+  delete select.dataset.editing;
+  select.selectedIndex = 0;
+  if (!id || !sessionId) return;
+  const title = view.sessionsById.get(sessionId)?.title ?? '세션';
+  mutate(id, {}, { assign: sessionId }, '배정하지 못했어요', `👤 ${title} 배정했어요`);
 };
 
 // [×] on an assigned session in the +n list (design §4.3.3). Only earlier sessions get one, so `latest` holds.
@@ -464,6 +487,7 @@ const onKeydown = e => {
 };
 
 const onChangeEvent = e => {
+  if (e.target.matches('.bb-assign')) { assign(e.target.closest('[data-todo]')?.dataset.todo, e.target); return; }
   if (e.target.name !== 'folder' || !e.target.closest('.bb-form')) return;
   const text = field('folderText');
   text.hidden = e.target.value !== '';
@@ -487,9 +511,11 @@ export const mountBlackboard = (el, { onChange = () => {} } = {}) => {
   el.addEventListener('click', onClick);
   el.addEventListener('keydown', onKeydown);
   el.addEventListener('change', onChangeEvent);
-  el.addEventListener('focusin', e => { if (e.target.matches('.bb-detail')) e.target.dataset.editing = '1'; });
+  // an open 👤 배정 list is frozen like a memo being typed: a poll repaint would close it
+  el.addEventListener('focusin', e => { if (e.target.matches('.bb-detail, .bb-assign')) e.target.dataset.editing = '1'; });
   el.addEventListener('focusout', e => {
     if (e.target.matches('.bb-detail')) saveDetail(e.target.closest('[data-todo]').dataset.todo, e.target);
+    if (e.target.matches('.bb-assign')) delete e.target.dataset.editing;
   });
   draw();
 };

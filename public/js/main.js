@@ -15,7 +15,8 @@ import { handleAction } from './panel/footer.js';
 import './views/sprites.js'; // side effect: populates #animal-defs once, before first render
 
 const handleClick = e => {
-  if (e.target.closest('#meeting-open')) { setScreen(view.screen === 'meeting' ? 'office' : 'meeting'); poll(); return; }
+  const door = e.target.closest('[data-screen]'); // 회의실 doors; focus follows to the door on the other side
+  if (door) { setScreen(door.dataset.screen); document.querySelector(`[data-screen="${view.screen === 'meeting' ? 'office' : 'meeting'}"]`)?.focus(); poll(); return; }
   if (e.target.closest('#archive-open')) { archive.openArchive(); return; }
   if (e.target.closest('#archive-done')) { archive.archiveAllDone(); return; }
   if (e.target.closest('#archive-close')) { $('#archive-dialog').close(); return; }

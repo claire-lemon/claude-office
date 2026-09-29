@@ -17,7 +17,6 @@
 <header class="topbar">
   <h1>오늘의 사무실</h1>
   <div class="counters" role="group" aria-label="필터"></div><!-- buttons from views/filters.js FILTERS -->
-  <button id="meeting-open" class="icon-btn meeting-btn" type="button" aria-pressed="false" title="회의실">🏫 회의실</button>
   <button id="archive-open" class="icon-btn archive-btn" type="button" title="보관함" data-drop="archive">🗄️ 보관함</button>
   <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" title="알림 소리">🔔</button>
 </header>
@@ -46,6 +45,20 @@
           <rect x="20" y="16" width="12" height="12" fill="#6b8f57"/>
           <rect x="14" y="4" width="12" height="12" fill="#8fc274"/>
         </svg>
+        <!-- the way into the 회의실 (main.js [data-screen]); its twin in views/meeting.js leads back -->
+        <button type="button" class="door" data-screen="meeting" title="회의실 들어가기">
+          <svg class="door-svg" viewBox="0 0 32 48" aria-hidden="true">
+            <rect x="0" y="0" width="32" height="48" class="door-frame"/>
+            <rect x="3" y="3" width="26" height="45" class="door-gap"/>
+            <g class="door-leaf">
+              <rect x="3" y="3" width="26" height="45" class="door-wood"/>
+              <rect x="7.5" y="7.5" width="17" height="14" class="door-panel"/>
+              <rect x="7.5" y="27.5" width="17" height="16" class="door-panel"/>
+              <rect x="22" y="23" width="3" height="3" class="door-knob"/>
+            </g>
+          </svg>
+          <span class="door-sign">회의실</span>
+        </button>
       </div>
       <div class="desks" id="desks"></div>
       <section class="meeting" id="meeting" aria-label="회의실" hidden></section><!-- views/meeting.js -->

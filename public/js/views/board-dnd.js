@@ -55,7 +55,7 @@ export const mountBoardDnd = (columnsEl, { onEnd }) => {
     targets('[data-drop-todo]').forEach(t => {
       if (t.dataset.dropTodo === session.todoId) return;
       t.classList.add('drop-ok');
-      t.dataset.hint = '할 일에 배정';
+      t.dataset.hint = '여기 놓으면 배정';
     });
   });
 
