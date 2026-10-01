@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-// 오늘 일지 AI 서술 against its own fixture home, no server: the timer entry (narrateIfDue) with a fake model
+// 업무일지 AI 서술 against its own fixture home, no server: the timer entry (narrateIfDue) with a fake model
 // call, then the CLI `narrate` with a fake `claude` on PATH. config.mjs reads env at import time.
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'office-narrate-'));
@@ -14,8 +14,6 @@ process.env.OFFICE_HOME = HOME;
 const { OFFICE_DIR, NARRATE_HOUR, NARRATE_AUTO } = await import('../../src/config.mjs');
 const { narrateIfDue } = await import('../../src/usecases/narrate.mjs');
 const { NARRATIVE_SYSTEM } = await import('../../src/domain/prompts.mjs');
-const { meetingPrompt } = await import('../../src/domain/meeting.mjs');
-const { markerLine } = await import('../../src/domain/todo.mjs');
 const { localDate, NARRATIVE_START, AUTO_END, appendSection } = await import('../../src/domain/daily-note.mjs');
 
 const day = new Date();
@@ -41,26 +39,17 @@ const assistant = text => line({ type: 'assistant', isSidechain: false, message:
 const note = () => fs.readFileSync(NOTE, 'utf8');
 
 // A work session shaped like a real transcript (app preamble, reminder block before the prompt, tool result)
-// started from a 칠판 todo (marker line first), a facilitator (a meeting, not work) and a session from three
-// days ago (outside the window).
-const MARKER = markerLine('pay001', '결제 모듈');
-fs.writeFileSync(
-    path.join(OFFICE_DIR, 'todos.json'),
-    JSON.stringify({ pay001: { title: '결제 모듈', detail: '', folder: repo, createdAt: Date.now() - 3600_000, source: 'manual', manual: null, deletedAt: null } }),
-);
+// and a session from three days ago (outside the window).
 const tW = transcript(
     'cli-w',
     line({ type: 'queue-operation' }),
     line({ type: 'attachment' }),
-    line({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: '<system-reminder>\n앱 안내\n</system-reminder>' }, { type: 'text', text: `${MARKER}\n결제 모듈 분리해줘` }] } }),
+    line({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: '<system-reminder>\n앱 안내\n</system-reminder>' }, { type: 'text', text: '결제 모듈 분리해줘' }] } }),
     line({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'ls 결과' }] } }),
     assistant('## 결재 보고\n### 한 줄 요약\n1. 결제 분리 완료'),
 );
 app('local_w', 'cli-w', repo, Date.now() - 60_000, 'W 세션');
 state('cli-w', Date.now() - 30_000, repo, tW);
-const tM = transcript('cli-m', line({ type: 'user', message: { role: 'user', content: meetingPrompt(`${TODAY}-1`, NOTE, 'guide') } }), assistant('회의 메시지'));
-app('local_m', 'cli-m', OFFICE_DIR, Date.now(), '진행자');
-state('cli-m', Date.now(), OFFICE_DIR, tM);
 app('local_old', 'cli-old', repo, Date.now() - 3 * 24 * 3600 * 1000, '옛 세션');
 
 test('the server timer never runs for a fixture home', () => {
@@ -81,15 +70,13 @@ test('narrateIfDue: nothing before NARRATE_HOUR, once after it, then not again t
     assert.equal(system, NARRATIVE_SYSTEM);
     assert.ok(timeout > 60000);
     assert.match(input, /<session n="1">\n제목: W 세션\n/);
-    assert.ok(input.includes(`요청:\n${MARKER}\n결제 모듈 분리해줘\n`), 'first prompt without the reminder block');
-    // the linked todo, with its sessions, right after the sessions
-    assert.match(input, /<\/sessions>\n<todos>\n1\. ◐ 결제 모듈 — api · 세션 1개\n {3}1\. \S+ W 세션 — 결재 대기 · \d{2}-\d{2} \d{2}:\d{2}\n<\/todos>\n/);
+    assert.ok(input.includes('요청:\n결제 모듈 분리해줘\n'), 'first prompt without the reminder block');
     assert.ok(input.includes('마지막 응답:\n## 결재 보고\n### 한 줄 요약\n1. 결제 분리 완료\n</session>'));
-    assert.ok(!input.includes('진행자') && !input.includes('옛 세션'));
+    assert.ok(!input.includes('옛 세션') && !input.includes('<todos>'));
     const text = note();
     assert.ok(text.indexOf(AUTO_END) < text.indexOf(NARRATIVE_START), 'narrative after the auto block');
     assert.ok(text.includes('이후 세션 1개'));
-    assert.match(text, /## 할 일 기록 \(\d{4}-\d{2}-\d{2} 00:00 이후\)\n1\. ◐ 결제 모듈 — api · 세션 1개\n/);
+    assert.match(text, /## 어제 세션 \(\d{4}-\d{2}-\d{2} 00:00 이후\)\n1\. W 세션 — 결재 대기 · 📁 api\n/);
     assert.ok(text.includes('1. **api**: 결제 모듈을 나눴다.'));
 
     assert.equal(await narrateIfDue(today(NARRATE_HOUR + 2), run), null);
@@ -105,8 +92,8 @@ const fakeClaude = script => {
     return { code: r.status, out: JSON.parse(r.stdout) };
 };
 
-test('CLI narrate: rewrites the narrative in place, keeps 회의 sections; a failed model call leaves the note', () => {
-    fs.writeFileSync(NOTE, appendSection(note(), '## 회의 1 (09:00 ~ 09:10)\n1. 오늘 할 일 확정 0개'));
+test('CLI narrate: rewrites the narrative in place, keeps hand notes; a failed model call leaves the note', () => {
+    fs.writeFileSync(NOTE, appendSection(note(), '## 메모\n1. 오후에 배포'));
     const log = path.join(HOME, 'call.json');
     const ok = fakeClaude(`const fs = require('fs');
 fs.writeFileSync(${JSON.stringify(log)}, JSON.stringify({ args: process.argv.slice(2), input: fs.readFileSync(0, 'utf8') }));
@@ -119,10 +106,18 @@ process.stdout.write('1. **api**: 다시 쓴 이야기.');`);
     const text = note();
     assert.equal(text.split(NARRATIVE_START).length, 2, 'one narrative block');
     assert.ok(text.includes('1. **api**: 다시 쓴 이야기.') && !text.includes('결제 모듈을 나눴다'));
-    assert.ok(text.trimEnd().endsWith('## 회의 1 (09:00 ~ 09:10)\n1. 오늘 할 일 확정 0개'));
+    assert.ok(text.trimEnd().endsWith('## 메모\n1. 오후에 배포'));
 
     const failed = fakeClaude("process.stderr.write('not logged in'); process.exit(1);");
     assert.equal(failed.code, 1);
     assert.ok(failed.out.error);
     assert.ok(note().includes('1. **api**: 다시 쓴 이야기.'));
+});
+
+test('CLI: anything but `narrate` exits 1 with the usage', () => {
+    ['', 'todo list', 'narrate extra'].forEach(args => {
+        const r = spawnSync('node', [path.join(ROOT, 'bin/office.mjs'), ...args.split(' ').filter(Boolean)], { env: { ...process.env, OFFICE_HOME: HOME }, encoding: 'utf8' });
+        assert.equal(r.status, 1, args);
+        assert.match(JSON.parse(r.stdout).error, /usage: node bin\/office\.mjs narrate/);
+    });
 });

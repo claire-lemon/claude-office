@@ -1,6 +1,6 @@
 import { $ } from './lib/dom.js';
 import * as api from './api.js';
-import { state, selected, controls, view, todos, meeting } from './store.js';
+import { state, selected, controls, view } from './store.js';
 import * as office from './views/office.js';
 import * as layout from './views/layout.js';
 import * as board from './views/board.js';
@@ -9,15 +9,14 @@ import { filterById, mountFilters, updateCounters } from './views/filters.js';
 import * as notify from './views/notify.js';
 import { health, renderFreshness, renderNotices } from './views/freshness.js';
 import * as archive from './views/archive.js';
-import { mountBlackboard, renderBlackboard } from './views/blackboard.js';
-import { mountMeeting, renderMeeting, setScreen } from './views/meeting.js';
+import * as journal from './views/journal.js';
 import * as panel from './panel/panel.js';
 import { handleAction } from './panel/footer.js';
 import './views/sprites.js'; // side effect: populates #animal-defs once, before first render
 
 const handleClick = e => {
-  const door = e.target.closest('[data-screen]'); // 회의실 doors; focus follows to the door on the other side
-  if (door) { setScreen(door.dataset.screen); document.querySelector(`[data-screen="${view.screen === 'meeting' ? 'office' : 'meeting'}"]`)?.focus(); poll(); return; }
+  if (e.target.closest('#journal-open')) { journal.openJournal(); return; }
+  if (e.target.closest('#journal-close') || e.target.id === 'journal-dialog') { journal.closeJournal(); return; } // ✕ or backdrop
   if (e.target.closest('#archive-open')) { archive.openArchive(); return; }
   if (e.target.closest('#archive-done')) { archive.archiveAllDone(); return; }
   if (e.target.closest('#archive-close')) { $('#archive-dialog').close(); return; }
@@ -37,12 +36,9 @@ const handleClick = e => {
 };
 document.addEventListener('click', handleClick);
 
-// Esc: an open panel first, then the meeting screen (not while a dialog is open: Esc closes that one).
-// Menus and inline edits stop their own Escape before it gets here.
+// Esc closes an open panel (a dialog closes itself). Menus and inline edits stop their own Escape first.
 document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape') return;
-  if (selected.id) { panel.closePanel(); return; }
-  if (view.screen === 'meeting' && !document.querySelector('dialog[open]')) setScreen('office');
+  if (e.key === 'Escape' && selected.id) panel.closePanel();
 });
 
 // ---------- render (poll, filter change, drag end) ----------
@@ -55,7 +51,6 @@ const render = () => {
   else office.renderOffice(list.filter(f.match), { showEmpty: false });
   board.renderKanban(list, f);
   updateCounters(list);
-  office.updateDoor(list); // the full list: a filter doesn't end the meeting
 };
 mountFilters($('.counters'), render);
 mountBoardDnd($('.kan-columns'), { onEnd: render });
@@ -68,30 +63,9 @@ const applySessions = list => {
   notify.checkNotifications(list);
 };
 
-// Todos ride the same poll. A failed /api/todos keeps the last lists (board/panel 📋 tags read them too).
-const loadTodos = async () => {
-  try {
-    const res = await api.getTodos();
-    if (!res.ok) return;
-    const data = await res.json();
-    todos.list = Array.isArray(data.todos) ? data.todos : [];
-    todos.deleted = Array.isArray(data.deleted) ? data.deleted : [];
-    todos.folders = Array.isArray(data.folders) ? data.folders : [];
-  } catch {}
-};
-
-// Only on the meeting screen. A failed /api/meeting keeps the last answer.
-const loadMeeting = async () => {
-  if (view.screen !== 'meeting') return;
-  try {
-    const res = await api.getMeeting();
-    if (res.ok) meeting.data = await res.json();
-  } catch {}
-};
-
 // A failed /api/sessions keeps the last screen but flips the header badge to 오프라인.
 const poll = async () => {
-  const [res] = await Promise.all([api.getSessions().catch(() => null), loadTodos(), loadMeeting()]);
+  const res = await api.getSessions().catch(() => null);
   try {
     if (!res || !res.ok) throw new Error('poll failed');
     const data = await res.json();
@@ -104,11 +78,8 @@ const poll = async () => {
   }
   renderFreshness();
   renderNotices();
-  renderBlackboard(todos, state.sessionsById); // after sessions: a linked worker is clickable only while on the board
-  if (view.screen === 'meeting') renderMeeting(meeting.data, todos);
 };
 controls.poll = poll;
-controls.selectSession = panel.selectSession;
 
 // ?open=<session id>&tab=diff opens that session's panel once (bookmarks, README screenshots).
 const urlOpen = { done: false };
@@ -122,12 +93,7 @@ const openFromUrl = () => {
   if (params.get('tab') === 'diff') panel.setTab('diff');
 };
 
-mountBlackboard($('#blackboard'), { onChange: poll });
-mountMeeting($('#meeting'), { onChange: poll });
 layout.initLayout({ seats: office.SEATS });
-const screenFromHash = () => setScreen(location.hash === '#meeting' ? 'meeting' : 'office');
-screenFromHash(); // a reload on #meeting stays in the meeting room
-window.addEventListener('hashchange', () => { screenFromHash(); poll(); }); // typed or linked #meeting
 office.updateWindow();
 poll();
 setInterval(poll, 2000);

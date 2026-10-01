@@ -59,18 +59,19 @@ test('buildSessions + diff on simulated office', () => {
     assert.deepEqual(stopped.diffStat, { files: 2, add: 2, del: 0 }); // includes the untracked new-file.md
 });
 
-test('install is idempotent, keeps foreign hooks and rules, uninstall removes only ours', () => {
+test('install is idempotent, keeps foreign hooks and rules, drops the old facilitator read rules, uninstall removes only ours', () => {
     const settings = path.join(HOME, '.claude/settings.json');
     const foreign = { permissions: { allow: ['Bash(ls)'], deny: ['Read(./.env)'] }, hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo mine' }] }] }, model: 'x' };
-    fs.writeFileSync(settings, JSON.stringify(foreign));
+    const office = path.join(HOME, '.claude/office');
+    const oldReads = [`Read(/${office}/CLAUDE.md)`, `Read(/${office}/daily/**)`]; // what the 회의실 version added
+    fs.writeFileSync(settings, JSON.stringify({ ...foreign, permissions: { ...foreign.permissions, allow: ['Bash(ls)', ...oldReads] } }));
     const run = (...a) => execFileSync('node', [path.join(ROOT, 'install.mjs'), ...a], { env });
     run();
     run();
     const installed = JSON.parse(fs.readFileSync(settings, 'utf8'));
     assert.equal(installed.hooks.Stop.length, 2);
     assert.equal(installed.hooks.UserPromptSubmit.length, 1);
-    const office = path.join(HOME, '.claude/office');
-    assert.deepEqual(installed.permissions.allow, ['Bash(ls)', `Read(/${office}/CLAUDE.md)`, `Read(/${office}/daily/**)`]);
+    assert.deepEqual(installed.permissions.allow, ['Bash(ls)']);
     assert.deepEqual(installed.permissions.deny, ['Read(./.env)']);
     run('--uninstall');
     assert.deepEqual(JSON.parse(fs.readFileSync(settings, 'utf8')), foreign);

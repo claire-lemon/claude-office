@@ -11,8 +11,6 @@
 |---|---|
 | ![보고서 탭: 결재 보고와 다음 작업](docs/images/panel-report.png) | ![변경사항 탭: 워크트리 diff](docs/images/panel-diff.png) |
 
-![회의실: 오늘의 할 일 칠판과 진행자](docs/images/meeting-room.png)
-
 - 의존성 0개 (Node 22 표준 라이브러리 + `git`)
 - `127.0.0.1:7777` 전용
 - macOS 전용 (앱 로컬 파일, `open`, `pbcopy` 사용). 호환성·검증 상태: [`docs/research/2026-09-28-compat-and-verification.md`](docs/research/2026-09-28-compat-and-verification.md)
@@ -62,14 +60,14 @@ flowchart TB
 
 ```
 server.mjs              진입점 (src/http/server.mjs 실행)
-install.mjs             hooks·진행자 읽기 허용 규칙 설치·제거
+install.mjs             hooks 설치·제거
 hooks/report.mjs        hook (실행 속도 때문에 의존성 없이 단독)
-bin/office.mjs          칠판 CLI (사람용, 서버 불필요)
+bin/office.mjs          업무일지 CLI (`narrate`, 서버 불필요)
 src/
   config.mjs            환경변수·경로·한도 (환경변수는 여기서만 읽음)
   http/                 controller: 입력 정리 → use-case 호출 → 응답, Host/Origin 검사
-  usecases/             흐름: 세션 목록, 변경사항, 컨펌·보류·아카이브, 다음 작업, 요약, 할 일·세션 연결·배정, 회의, AI 서술, 프롬프트 다듬기
-  domain/               순수 함수: 상태 판정, 대기·턴 시간(timeline), 보고서 파싱, 프롬프트, diff 파싱, 할 일 규칙, 일지·진행자 지침
+  usecases/             흐름: 세션 목록, 변경사항, 컨펌·보류·아카이브, 다음 작업, 요약, 업무일지(어제 세션 정리·AI 서술)
+  domain/               순수 함수: 상태 판정, 대기·턴 시간(timeline), 보고서 파싱, 프롬프트, diff 파싱, 일지
   sources/              데이터 읽기·쓰기: 앱 세션 파일, hook 상태·이벤트 이력, 대화 기록, 결정, git
   platform/             OS 부수효과: open, pbcopy, claude -p
 public/
@@ -77,7 +75,7 @@ public/
   css/                  base · office · board · panel · changes · markdown
   js/                   main → api · store → views/ · panel/
   js/lib/               import 없는 모듈: 계산(grid-math, markdown)과 작은 DOM 도구(splitter, inline-edit)
-  js/views/             사무실·결재함·헤더(갱신 표시 freshness.js)·칠판(blackboard.js)·회의실(meeting.js). columns.js(칸)·filters.js(필터)는 규칙 표
+  js/views/             사무실·결재함·헤더(갱신 표시 freshness.js)·업무일지(journal.js). columns.js(칸)·filters.js(필터)는 규칙 표
   js/panel/             상세 패널. actions.js(버튼)는 규칙 표
 test/unit/              순수 함수 테스트
 test/integration/       서버·fixture·임시 git 레포 테스트
@@ -87,7 +85,7 @@ test/integration/       서버·fixture·임시 git 레포 테스트
 - 규칙은 표로 둔다. 새 칸·드래그 규칙·필터·버튼·편집 필드는 표에 한 줄을 더하면 된다(고칠 곳: [설계 §4](docs/specs/2026-09-28-board-interactions-design.md#4-확장-지점-나중에-기능을-붙이는-곳)).
 - 세션이 어느 칸에 있고 어디로 옮길 수 있는지는 서버(`src/domain/board.mjs`)가 계산해 `column`, `moves`로 내려준다. 화면은 그대로 보여주기만 한다.
 - 파일 쓰기와 OS 명령은 `sources/`와 `platform/`에만 있다.
-- 설계 문서: [레이어·상세 패널](docs/specs/2026-09-28-layering-and-panel-design.md), [결재함 상호작용](docs/specs/2026-09-28-board-interactions-design.md), [오늘의 할 일 칠판](docs/specs/2026-09-28-todo-blackboard-design.md), [회의실](docs/specs/2026-09-29-meeting-room-design.md), [AI 서술](docs/specs/2026-09-29-daily-narrative-design.md), [연결 기록](docs/specs/2026-09-29-todo-history-design.md), [마무리](docs/specs/2026-09-29-finishing-touches-design.md), [이벤트 이력](docs/specs/2026-09-29-event-history-design.md), [진행자 읽기 허용](docs/specs/2026-09-29-facilitator-permissions-design.md), 제품 리뷰: [`docs/product-review-20260929.md`](docs/product-review-20260929.md)
+- 설계 문서: [레이어·상세 패널](docs/specs/2026-09-28-layering-and-panel-design.md), [결재함 상호작용](docs/specs/2026-09-28-board-interactions-design.md), [AI 서술](docs/specs/2026-09-29-daily-narrative-design.md), [이벤트 이력](docs/specs/2026-09-29-event-history-design.md), [할 일 칠판·회의실 제거](docs/specs/2026-10-01-remove-todo-blackboard.md), 제품 리뷰: [`docs/product-review-20260929.md`](docs/product-review-20260929.md)
 
 ## 먼저 데모로 보기 (실제 설정 안 건드림)
 
@@ -99,7 +97,7 @@ node scripts/demo.mjs public 7770
 
 ## 실제로 쓰기
 
-1. hooks 설치 (`~/.claude/settings.json` 백업 후 `UserPromptSubmit` / `Notification` / `Stop` hooks와 회의 진행자 읽기 허용 규칙 2줄 추가)
+1. hooks 설치 (`~/.claude/settings.json` 백업 후 `UserPromptSubmit` / `Notification` / `Stop` hooks 추가)
    ```bash
    node install.mjs
    ```
@@ -112,7 +110,7 @@ node scripts/demo.mjs public 7770
 
 특정 세션 패널을 바로 여는 주소: `http://127.0.0.1:7777/?open=<세션 id>` (변경사항 탭은 `&tab=diff`).
 
-읽기 허용 규칙은 `~/.claude/office/CLAUDE.md`(진행자 지침)와 `~/.claude/office/daily/**`(일지) 두 곳의 `Read`만 연다. 진행자 세션은 워크트리·임시 작업 공간에서 열려 이 파일들이 작업 폴더 밖이라, 규칙이 없으면 회의마다 허용 클릭이 뜬다([설계](docs/specs/2026-09-29-facilitator-permissions-design.md)). 이전에 설치했다면 원래 체크아웃에서 `node install.mjs`를 한 번 더 실행한다(워크트리에서 실행하면 hooks 경로가 그 워크트리로 바뀐다).
+회의실이 있던 버전을 설치했다면 원래 체크아웃에서 `node install.mjs`를 한 번 더 실행한다. 그때 넣은 진행자 읽기 허용 규칙 2줄(`~/.claude/office/CLAUDE.md`, `~/.claude/office/daily/**`)을 지운다(워크트리에서 실행하면 hooks 경로가 그 워크트리로 바뀐다).
 
 hooks는 설치 **이후** 시작된 턴부터 잡힌다. 설치 전 세션은 24시간 이내 활동분만 회색(상태 미상)으로 보인다. 앱 세션은 있는데 hook 기록이 하나도 없으면 헤더 아래에 `node install.mjs` 안내가 뜨고, 세션이 하나도 없으면 3단계 설치 안내가 뜬다.
 
@@ -167,53 +165,22 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.claude-office.plis
 
 - **필터**: 헤더의 **결재 대기**·**보류** 숫자를 누르면 그 세션만 보인다(사무실은 해당 책상만, 결재함은 그 칸만 넓게). **출근**을 누르면 전체로 돌아온다.
 
-## 오늘의 할 일 칠판
+## 📓 업무일지
 
-사무실 왼쪽 벽의 칠판에 오늘 할 일을 적고, 항목마다 **시작**을 누르면 그 일을 맡을 새 세션이 열린다. 할 일(이슈)에 세션(PR)을 다는 느낌이다.
+헤더의 **📓 업무일지**를 누르면 오늘 일지의 AI 서술(어제 이야기)이 뜬다. 어제 한 일을 세션 목록이 아니라 프로젝트별 이야기로 다시 보는 곳이다.
 
-1. **+ 할 일 추가**: 제목, 프로젝트 폴더(최근 세션들이 쓴 폴더 중 선택 또는 직접 입력), 세부 메모. Enter 저장, Esc 취소.
-   - 폴더 후보는 최근 세션의 레포(워크트리 `…/.claude/worktrees/…`는 그 레포로 묶음)와 칠판 할 일이 쓰는 폴더다. 홈 폴더 자체, `~/.claude/office`, 앱의 임시 작업 공간은 뺀다. 회의 진행자와 일지의 `## 최근 프로젝트 폴더`도 같은 목록을 쓴다.
-2. **시작**: 프롬프트가 채워진 새 세션 입력창이 열린다(Enter만 누르면 됨). 첫 줄이 `📋 오늘의 할 일 #todo-a1b2c3 · 제목`이고, 서버가 그 표식으로 세션을 할 일에 연결한다. 그 세션에서 "다음 작업 ▶ 진행"으로 이어진 세션도 같은 할 일에 붙는다.
-3. 연결된 워커 얼굴과 상태 칩이 항목에 붙고, 클릭하면 그 세션 패널이 열린다. 결재함 카드와 패널에도 📋 태그가 보인다. 세션이 여러 개 거쳐 갔으면(다시 시작, 이어진 세션) 칩 옆 **+n**을 눌러 이전 세션들을 오래된 순으로 펼친다.
-4. 할 일 상태는 서버가 연결 세션에서 계산한다.
-
-   | 연결 세션 | 할 일 |
-   |---|---|
-   | 없음 | 대기 |
-   | 작업 중 · 결재 대기 · 보류 · 오래된 세션 | 진행 중 |
-   | 컨펌 · 아카이브 | 완료 (당일만 취소선으로 보이고 자정 이후 숨김) |
-   | 체크박스 수동 체크/해제 | 세션 결정과 겨루면 더 최근 것이 우선 |
-
-5. **✨ 다듬기**: 항목의 메모를 열고 ✨ 다듬기를 누르면 모델(`claude -p`, haiku, 격리 호출)이 제목·메모·연결 세션·오늘 업무일지를 보고 `목표 / 할 일 / 완료 기준 / 주의` 형태의 작업 지시문을 제안한다. **적용**해야 메모에 저장되고, 그다음 **시작**하면 그 메모가 프롬프트에 들어간다. 자료에 없는 사실은 "확인 필요"로 남긴다.
-6. **세션 배정**: 앱에서 바로 시작한 세션도 할 일에 붙일 수 있다. 칠판 항목의 **👤 배정** 목록에서 세션을 고르거나, 결재함 카드를 칠판 항목에 끌어 놓거나(끄는 동안 칠판 위에 안내가 뜬다), 세션 패널의 "📋 할 일에 배정…"에서 고른다. 배정은 패널의 **해제**나 칠판 이력(+n)의 **×**로 푼다. 한 세션은 할 일 하나에만 속하고(다른 할 일에 배정하면 옮겨짐), 칠판 **시작**으로 연 세션은 옮길 수 없다. 배정한 세션도 컨펌·아카이브하면 할 일이 완료된다.
-7. 삭제는 5초 안에 **되돌리기**할 수 있고, 칠판은 접거나(▾) 책상과의 경계를 끌어 폭을 바꿀 수 있다.
-8. 할 일(배정 포함)은 `~/.claude/office/todos.json`에 저장한다. 세션 연결과 상태는 매번 대화 기록과 배정에서 계산하고, 한 번 본 연결은 `links.json`에 스냅샷으로 남긴다. Claude Code는 30일 지난 대화 기록을 지우는데, 그 뒤에도 할 일이 세션 이력과 완료 상태를 잃지 않게 하려는 것이다(대화 기록이 있는 동안은 늘 그쪽이 우선).
-
-## 회의실 (daily scrum)
-
-칠판 옆의 **회의실 문**을 누르면 화면이 회의실로 바뀐다(마우스를 올리면 문이 열린다). 오늘 회의가 열려 있으면 문 위 등이 켜지고 팻말이 "회의 중"으로 바뀐다. 진행자가 답을 정리하는 동안은 등이 빠르게 깜빡인다. 돌아올 때는 회의실 오른쪽 위의 **나가기** 문이나 Esc. 왼쪽은 오늘의 할 일 칠판, 오른쪽은 진행자 자리다. 어제 한 일을 정리하고 오늘 할 일을 브레인스토밍하는 곳이다.
-
-1. **회의 시작**: 서버가 오늘 일지 `~/.claude/office/daily/YYYY-MM-DD.md`를 만들고(어제 0시 이후 세션들의 상태·한 줄 요약·다음 작업 추천, 지금 칠판, 어제 0시 이후 할 일 기록(할 일마다 거쳐 간 세션, 완료·삭제 포함), 최근 프로젝트 폴더), 진행자 세션 입력창을 연다(Enter만 누르면 됨).
-2. **진행자**는 진짜 Claude Code 세션이다. 프롬프트에 적힌 지침 파일 `~/.claude/office/CLAUDE.md`(서버가 관리)를 먼저 읽고 그대로 따른다(앱이 세션을 임시 작업 공간에 열 수 있어서 폴더의 CLAUDE.md에 기대지 않는다). 읽는 것은 오늘 일지와 사용자의 말뿐이고 레포·볼트 조사, 파일 쓰기, 명령 실행(Bash), git은 금지다. 첫 메시지로 "어제 끝낸 일 / 못 끝낸 일 / 오늘 추천"을 내놓고, 대화는 앱 채팅창에서 한다.
-3. **칠판 자동 반영**: 진행자는 답변마다 끝에 `### 칠판` 목록(`1. 제목 — 폴더 이름`, 하위 항목은 세부 메모, 7개 이하)을 쓰고, 서버가 3초마다 진행자의 마지막 답변을 읽어 칠판에 옮긴다. 사용자가 대답하지 않아도 첫 답변만으로 칠판이 채워진다.
-   1. 목록에 새로 생긴 항목은 만들고, 이 회의가 만든 항목의 세부·폴더가 바뀌면 고친다(제목은 건드리지 않음).
-   2. 같은 제목(공백·대소문자 무시)의 할 일이 이미 칠판에 있으면 다시 만들지 않는다.
-   3. 목록에서 빠진 항목은 시작 전이고 손대지 않았을 때(수동 체크·배정 없음)만 지운다. 칠판에서 지운 항목은 목록에 남아 있어도 다시 만들지 않는다.
-   4. 폴더 이름은 일지 `## 최근 프로젝트 폴더`(어제 세션 줄의 `📁 이름`)에서 고른다. 못 찾거나 같은 이름이 둘이면 만들지 않고 회의실에 "폴더를 몰라 못 적은 항목"으로 보여준다. 회의실 진행자 탭에는 "칠판에 반영: N개"가 뜬다.
-
-   칠판 CLI는 사람용으로 남아 있다(서버 불필요).
+1. **지금 쓰기 / 다시 쓰기**: 모델(`claude -p`, haiku, 격리 호출)이 어제 세션들을 서술한다. 1~2분 걸리고 서버에서 백그라운드로 돌며, 창은 2초마다 진행 상태를 보여준다. 아래 일지 경로를 누르면 복사된다.
+2. **일지 파일** `~/.claude/office/daily/YYYY-MM-DD.md`
+   1. 자동 구간(`<!-- office:auto:start -->` … `end -->`): 어제 0시 이후 세션마다 상태·변경량·폴더·한 줄 요약·다음 작업 추천
+   2. `## 어제 이야기` 구간(`<!-- office:narrative:start -->` … `end -->`): 프로젝트별 이야기와 "남은 것"
+   3. 마커 밖에 직접 적은 메모는 그대로 둔다. Obsidian 같은 편집기로 열어도 된다.
+3. **자동 작성**: 서버가 켜져 있으면 매일 05시 이후 한 번 쓴다. 서버 시작 때와 10분마다 확인하고, 이미 있으면 건너뛴다.
+4. **CLI**: 서버 없이 지금 다시 쓰기(cron/launchd용)
    ```bash
-   node bin/office.mjs todo list
-   node bin/office.mjs todo add "제목" --folder /abs/path [--detail "…"] [--source scrum]
-   node bin/office.mjs todo update <id> [--title …] [--detail …] [--folder …] [--done true|false]
-   node bin/office.mjs todo delete <id>
-   node bin/office.mjs folders
-   node bin/office.mjs narrate      # 오늘 일지의 AI 서술을 지금 다시 쓰기
+   node bin/office.mjs narrate
    ```
-   회의에서 적은 항목은 칠판에 🏫 표시가 붙는다. 회의실 화면은 진행자의 최근 메시지와 칠판을 2초마다 새로 보여준다.
-4. **회의 끝**: 진행자의 마지막 답변을 칠판에 한 번 더 반영한 뒤 진행자 세션을 아카이브하고 일지에 `## 회의 n` 섹션(확정된 할 일, 진행자 마지막 메시지)을 덧붙인다. 하루에 여러 번 열 수 있다. 일지의 자동 구간(`<!-- office:auto:start -->` … `end -->`)만 회의 시작마다 다시 채워지고 나머지는 보존된다.
-5. **📓 업무일지 탭**: 회의실 진행자 자리 위의 탭으로 오늘 일지의 AI 서술을 본다. 없으면 **지금 쓰기**, 있으면 **다시 쓰기**(1~2분, 서버에서 백그라운드로 돌고 화면은 진행 상태를 보여준다). 진행자 탭에도 업무일지가 없을 때 "먼저 쓰면 진행자가 어제 흐름까지 본다"는 안내와 버튼이 뜬다.
-6. **AI 서술**: 서버가 켜져 있으면 매일 05시 이후 한 번, 어제 세션들을 모델(`claude -p`, haiku)이 프로젝트별 이야기와 "남은 것"으로 서술해 자동 구간 바로 뒤 `## 어제 이야기` 구간(`<!-- office:narrative:start -->` … `end -->`)에 넣는다. 서버 시작 때와 10분마다 확인하고, 이미 있으면 건너뛴다. 다시 쓰려면 `node bin/office.mjs narrate`. 진행자는 일지를 읽으므로 이 서술도 함께 본다.
+
+오늘의 할 일 칠판, 세션 배정, 회의실은 2026-10-01에 뺐다. 실제로는 거의 쓰이지 않았고, 할 일은 결재 보고의 "다음 작업"과 **OK** 버튼이 세션 안에서 이미 맡고 있다. 이유와 되살리는 법: [제거 기록](docs/specs/2026-10-01-remove-todo-blackboard.md).
 
 ## 상세 패널
 
@@ -233,7 +200,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.claude-office.plis
 
 - **보류**: 아무 동작 없이 결재함의 보류 칸으로 옮긴다. 24시간이 지나도 보드에 남는다.
 - **아카이브**: 사무실과 결재함에서 뺀다. 완료 칸 헤더의 **모두 아카이브**로 한 번에 비울 수 있다.
-- **🗄️ 보관함**(헤더): 아카이브한 작업을 작업 이름 · 날짜 · 한 줄 요약으로 보여주고, **복구**하면 보류 칸으로 돌아온다. 아래 **지난 할 일** 표에는 칠판에서 사라진 할 일(어제 이전에 완료, 삭제)이 결과와 거쳐 간 세션(→로 이어짐)과 함께 남는다.
+- **🗄️ 보관함**(헤더): 아카이브한 작업을 작업 이름 · 날짜 · 한 줄 요약으로 보여주고, **복구**하면 보류 칸으로 돌아온다.
 - 보류·아카이브·컨펌한 세션에 다시 지시를 보내면 자동으로 원래 상태로 돌아온다.
 
 ## 롤백
@@ -242,7 +209,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.claude-office.plis
 node install.mjs --uninstall
 ```
 
-hooks와 진행자 읽기 허용 규칙만 빠진다. 그리고 `~/.claude/CLAUDE.md`의 결재 보고 블록 삭제, `rm -rf ~/.claude/office`(결정·이름·할 일·연결 기록·일지·진행자 지침·이벤트 이력 포함). 이벤트 이력만 지우려면 `rm -rf ~/.claude/office/events`(대기 시간이 마지막 이벤트 기준으로, 지난 턴 표시가 빈칸으로 돌아갈 뿐이다). 앱 데이터와 세션은 읽기만 하므로 영향 없음.
+hooks만 빠진다(예전 버전이 넣은 진행자 읽기 허용 규칙도 함께). 그리고 `~/.claude/CLAUDE.md`의 결재 보고 블록 삭제, `rm -rf ~/.claude/office`(결정·이름·일지·이벤트 이력, 예전 버전의 할 일·연결 기록·진행자 지침 포함). 이벤트 이력만 지우려면 `rm -rf ~/.claude/office/events`(대기 시간이 마지막 이벤트 기준으로, 지난 턴 표시가 빈칸으로 돌아갈 뿐이다). 앱 데이터와 세션은 읽기만 하므로 영향 없음.
 
 ## 검증
 
@@ -256,10 +223,8 @@ node scripts/metrics.mjs
 - 세션 제목·딥링크는 앱 내부 파일(`~/Library/Application Support/Claude/claude-code-sessions`)에서 읽는다. 공개 API가 아니라 앱 업데이트로 바뀌면 제목이 폴더명으로, 딥링크가 사라진다(상태 추적은 hooks라 유지).
 - hooks 경로는 이 폴더의 절대경로로 등록된다. 폴더를 옮기거나 워크트리를 지우면 `node install.mjs`를 다시 실행해야 한다(파일이 없으면 hook이 exit 1로 끝나 세션은 계속 동작하지만 hook 오류 표시가 뜰 수 있다).
 - 앱의 기존 세션 입력창을 채우는 딥링크를 앱 코드에서 찾지 못해서, 컨펌은 클립보드 복사 + 채팅방 열기(⌘V, Enter)로 전달한다. 새 세션은 `claude://code/new?q=…` 딥링크로 입력창을 채운다(Enter만 누르면 됨).
-- 회의 진행자와의 대화는 앱 채팅창에서 한다. 회의실 화면은 진행자의 마지막 메시지만 보여준다.
-- 회의·일지는 서버의 로컬 날짜 기준이다. 자정을 걸쳐 회의하면 진행자를 "오늘" 것으로 찾지 못한다.
+- 일지는 서버의 로컬 날짜 기준이다.
 - AI 서술은 서버 안 타이머라 서버가 꺼져 있으면 써지지 않는다(켜지면 바로 확인). 서버 없이 돌리려면 `node bin/office.mjs narrate`를 cron/launchd에 건다. 서술은 모델 요약이라 세션 두 개를 한 문장에 섞는 등 틀릴 수 있다.
-- 할 일↔세션 연결은 새 세션 첫 프롬프트의 `#todo-…` 표식으로 잡는다. 표식 줄을 지우고 보내면 연결되지 않는다(칠판에서 다시 시작하면 됨).
 - 카드 끌어 옮기기는 마우스 전용이다. 키보드로는 상세 패널의 보류·보류 해제·컨펌 버튼으로 같은 일을 한다.
 - 이벤트 이력은 자동으로 지우지 않는다. 한 줄 50바이트 정도라 턴 200개짜리 세션도 30KB 안팎이고, 서버는 파일 끝 64KB만 읽는다.
 - 토큰·비용은 아직 보여주지 않는다(대화 기록 전체를 증분으로 읽어야 해서 보류, [이벤트 이력 설계 §7](docs/specs/2026-09-29-event-history-design.md)).

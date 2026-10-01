@@ -11,8 +11,6 @@ Design notes (Korean): [`docs/specs/2026-09-25-claude-office-design.md`](docs/sp
 |---|---|
 | ![Report tab: approval report and next tasks](docs/images/panel-report.png) | ![Changes tab: worktree diff](docs/images/panel-diff.png) |
 
-![Meeting room: today's todo blackboard and the facilitator](docs/images/meeting-room.png)
-
 - Zero dependencies (Node 22 standard library + `git`)
 - Binds to `127.0.0.1:7777` only
 - macOS only (uses the Claude desktop app's local files, `open`, and `pbcopy`). Compatibility and verification status (Korean): [`docs/research/2026-09-28-compat-and-verification.md`](docs/research/2026-09-28-compat-and-verification.md)
@@ -63,14 +61,14 @@ flowchart TB
 
 ```
 server.mjs              entry (runs src/http/server.mjs)
-install.mjs             install / uninstall hooks and the facilitator read rules
+install.mjs             install / uninstall hooks
 hooks/report.mjs        the hook (standalone, no imports, for startup speed)
-bin/office.mjs          blackboard CLI (for you; no server needed)
+bin/office.mjs          work log CLI (`narrate`; no server needed)
 src/
   config.mjs            env vars, paths, limits (the only place env vars are read)
   http/                 controller: normalize input → call a use case → respond; Host/Origin checks
-  usecases/             flows: session list, changes, confirm/hold/archive, next task, summary, todo ↔ session links and assignment, meetings, AI narrative, prompt refine
-  domain/               pure functions: status, wait/turn times (timeline), report parsing, prompts, diff parsing, todo rules, daily note, facilitator guide
+  usecases/             flows: session list, changes, confirm/hold/archive, next task, summary, work log (yesterday's sessions, AI narrative)
+  domain/               pure functions: status, wait/turn times (timeline), report parsing, prompts, diff parsing, daily note
   sources/              data in/out: app session files, hook state and event history, transcripts, decisions, git
   platform/             OS side effects: open, pbcopy, claude -p
 public/
@@ -78,7 +76,7 @@ public/
   css/                  base · office · board · panel · changes · markdown
   js/                   main → api · store → views/ · panel/
   js/lib/               import-free modules: math (grid-math, markdown) and small DOM helpers (splitter, inline-edit)
-  js/views/             office, board, header (freshness badge in freshness.js), blackboard (blackboard.js), meeting room (meeting.js). columns.js (columns) and filters.js (filters) are rule tables
+  js/views/             office, board, header (freshness badge in freshness.js), work log (journal.js). columns.js (columns) and filters.js (filters) are rule tables
   js/panel/             detail panel. actions.js (buttons) is a rule table
 test/unit/              pure-function tests
 test/integration/       server, fixtures, temp git repos
@@ -88,7 +86,7 @@ test/integration/       server, fixtures, temp git repos
 - Rules live in tables. A new column, drop rule, filter, button, or editable field is one more row (where: [design §4](docs/specs/2026-09-28-board-interactions-design.md#4-확장-지점-나중에-기능을-붙이는-곳), Korean).
 - The server (`src/domain/board.mjs`) decides which column a session is in and where it may be dropped, and sends that as `column` and `moves`. The page only displays it.
 - File writes and OS commands live only in `sources/` and `platform/`.
-- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [todo blackboard](docs/specs/2026-09-28-todo-blackboard-design.md), [meeting room](docs/specs/2026-09-29-meeting-room-design.md), [AI narrative](docs/specs/2026-09-29-daily-narrative-design.md), [link history](docs/specs/2026-09-29-todo-history-design.md), [finishing touches](docs/specs/2026-09-29-finishing-touches-design.md), [event history](docs/specs/2026-09-29-event-history-design.md), [facilitator read rules](docs/specs/2026-09-29-facilitator-permissions-design.md); product review: [`docs/product-review-20260929.md`](docs/product-review-20260929.md)
+- Design (Korean): [layering and detail panel](docs/specs/2026-09-28-layering-and-panel-design.md), [board interactions](docs/specs/2026-09-28-board-interactions-design.md), [AI narrative](docs/specs/2026-09-29-daily-narrative-design.md), [event history](docs/specs/2026-09-29-event-history-design.md), [removing the todo blackboard and meeting room](docs/specs/2026-10-01-remove-todo-blackboard.md); product review: [`docs/product-review-20260929.md`](docs/product-review-20260929.md)
 
 ## Try the demo first (touches no real settings)
 
@@ -100,7 +98,7 @@ Ten fake sessions change state every 8 seconds. Open `http://127.0.0.1:7770`.
 
 ## Use it for real
 
-1. Install the hooks. This backs up `~/.claude/settings.json`, then adds `UserPromptSubmit` / `Notification` / `Stop` hooks and two read rules for the meeting facilitator.
+1. Install the hooks. This backs up `~/.claude/settings.json`, then adds `UserPromptSubmit` / `Notification` / `Stop` hooks.
    ```bash
    node install.mjs
    ```
@@ -113,7 +111,7 @@ Ten fake sessions change state every 8 seconds. Open `http://127.0.0.1:7770`.
 
 To open a session's panel directly: `http://127.0.0.1:7777/?open=<session id>` (add `&tab=diff` for the changes tab).
 
-The read rules open `Read` for exactly two places: `~/.claude/office/CLAUDE.md` (the facilitator guide) and `~/.claude/office/daily/**` (daily notes). The app opens the facilitator in a worktree or a scratch workspace, so those files sit outside its working folder and every meeting would ask for a click ([design](docs/specs/2026-09-29-facilitator-permissions-design.md)). If you installed before, run `node install.mjs` once more from the main checkout (running it from a worktree points the hooks at that worktree).
+If you installed a version that had the meeting room, run `node install.mjs` once more from the main checkout. It removes the two facilitator read rules that version added (`~/.claude/office/CLAUDE.md`, `~/.claude/office/daily/**`). Running it from a worktree points the hooks at that worktree.
 
 Hooks only see turns that start **after** installation. Older sessions active in the last 24 hours show up grey (state unknown). If there are app sessions but no hook record at all, a banner under the header says to run `node install.mjs`; with no sessions at all, it shows the three setup steps.
 
@@ -168,53 +166,22 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.claude-office.plis
 
 - **Filter**: click the **결재 대기** (awaiting approval) or **보류** (hold) count in the header to see only those sessions (just their desks, and that one column, wide). Click **출근** (checked in) to see everyone again.
 
-## Today's todo blackboard
+## 📓 Work log
 
-A chalkboard on the office's left wall holds today's todos. Each item has a **시작** (start) button that opens a new session for that job — like assigning a PR to an issue.
+**📓 업무일지** (work log) in the header opens the AI narrative of today's note: yesterday told as a story per project, not as a list of sessions.
 
-1. **+ 할 일 추가** (add): title, project folder (pick one of the folders recent sessions used, or type a path), optional notes. Enter saves, Esc cancels.
-   - Folder candidates are recent sessions' repos (a worktree `…/.claude/worktrees/…` counts as its repo) plus folders the blackboard's todos use. The home folder itself, `~/.claude/office` and the app's scratch workspaces are left out. The meeting facilitator and the note's `## 최근 프로젝트 폴더` use the same list.
-2. **Start** opens a new-session input box with the prompt filled in (just press Enter). Its first line is `📋 오늘의 할 일 #todo-a1b2c3 · <title>`; the server finds that marker in the session's transcript and links the session to the todo. Sessions started from it with "다음 작업 ▶ 진행" inherit the marker and stay linked.
-3. The linked worker's face and a status chip appear on the item; clicking it opens that session's panel. Board cards and the panel show a 📋 tag too. When several sessions worked on one todo (a restart, a follow-up session), **+n** next to the chip expands the earlier ones, oldest first.
-4. Todo status is computed by the server from the linked session.
-
-   | Linked session | Todo |
-   |---|---|
-   | none | open |
-   | working · awaiting approval · on hold · stale | in progress |
-   | confirmed · archived | done (struck through for the rest of the day, hidden after midnight) |
-   | manual check / uncheck | whichever is newer, the check or the session decision, wins |
-
-5. **✨ 다듬기** (refine): open an item's notes and press ✨ 다듬기. A model (`claude -p`, haiku, isolated call) reads the title, notes, linked sessions and today's narrative, and proposes a work order shaped as `목표 / 할 일 / 완료 기준 / 주의` (goal / steps / done when / cautions). Nothing is saved until you press **적용** (apply); the next **Start** then puts those notes into the prompt. Facts missing from the input come back as "확인 필요" (to check).
-6. **Assigning sessions**: sessions you started straight from the app can join a todo too. Pick the session from a blackboard item's **👤 배정** (assign) menu, drag a board card onto a blackboard item (the blackboard says so while you drag), or pick the todo in the session panel's "📋 할 일에 배정…" menu. Undo it with **해제** in the panel or the **×** in the item's +n history. A session belongs to one todo only (assigning it elsewhere moves it), and a session started with the blackboard's **Start** can't be moved. Confirming or archiving an assigned session completes the todo as well.
-7. Deleting can be undone for 5 seconds; the board folds (▾) and its width is draggable.
-8. Todos (assignments included) are stored in `~/.claude/office/todos.json`. Links and status are derived from transcripts and assignments on every read, and every link seen once is also snapshotted in `links.json`: Claude Code deletes transcripts after 30 days, and the snapshot keeps a todo's session history and done state after that (while a transcript exists, it always wins).
-
-## Meeting room (daily scrum)
-
-The **meeting room door** next to the blackboard (it swings open on hover; while today's meeting is open its lamp is lit and the sign reads "회의 중", blinking fast while the facilitator writes a reply) switches the screen to the meeting room; the **나가기** (exit) door at its top right, or Esc, leads back. The room has the todo blackboard on the left, the facilitator's seat on the right. It is where yesterday gets summarized and today's todos get brainstormed.
-
-1. **회의 시작** (start): the server writes today's note, `~/.claude/office/daily/YYYY-MM-DD.md` (sessions active since yesterday 00:00 with status, one-line summary and next-task suggestions; the blackboard as it is; a todo history since yesterday 00:00 with every session each todo went through, done and deleted ones included; recent project folders), then opens a new-session input for the facilitator (just press Enter).
-2. **The facilitator is a real Claude Code session.** It first reads the guide file named in its prompt, `~/.claude/office/CLAUDE.md` (managed by the server), and follows it (the app may open the session in a scratch workspace, so the guide is not left to the folder's CLAUDE.md). It reads only today's note and what you say; no repo or vault digging, no file writes, no commands (Bash), no git. Its first message lists "finished yesterday / not finished / suggested for today", and the conversation happens in the app's chat.
-3. **The blackboard follows the meeting**: every facilitator reply ends with a `### 칠판` list (`1. title — folder name`, sub-items as the detail, at most 7), and every 3 seconds the server copies the facilitator's latest reply onto the blackboard. Even if you never answer, the first reply fills it.
-   1. New items are created; items this meeting created get their detail/folder updated when those change (the title is left alone).
-   2. A todo with the same title (ignoring spacing and case) already on the blackboard is not created again.
-   3. An item dropped from the list is removed only while it is not started and untouched (no manual check, no assignment). A todo you delete on the blackboard is not recreated even if the list still has it.
-   4. Folder names come from the note's `## 최근 프로젝트 폴더` (the `📁 name` on yesterday's session lines). An unknown or ambiguous name is not created; the meeting room lists it as "폴더를 몰라 못 적은 항목", next to "칠판에 반영: N개" on the facilitator tab.
-
-   The blackboard CLI stays for you (no server needed):
+1. **지금 쓰기 / 다시 쓰기** (write now / rewrite): a model (`claude -p`, haiku, isolated call) tells yesterday's sessions. It takes 1–2 minutes and runs in the server's background; the dialog shows its progress every 2 seconds. Click the note path below to copy it.
+2. **The note file** `~/.claude/office/daily/YYYY-MM-DD.md`
+   1. Auto block (`<!-- office:auto:start -->` … `end -->`): every session since yesterday 00:00 with status, diff size, folder, one-line summary and suggested next tasks
+   2. `## 어제 이야기` block (`<!-- office:narrative:start -->` … `end -->`): a story per project plus "남은 것" (what's left)
+   3. Anything you write outside the markers is kept. Open it in Obsidian or any editor.
+3. **Written for you**: while the server runs, once a day after 05:00. It checks at start and every 10 minutes and skips a day that already has one.
+4. **CLI**: rewrite it now without the server (for cron/launchd)
    ```bash
-   node bin/office.mjs todo list
-   node bin/office.mjs todo add "title" --folder /abs/path [--detail "…"] [--source scrum]
-   node bin/office.mjs todo update <id> [--title …] [--detail …] [--folder …] [--done true|false]
-   node bin/office.mjs todo delete <id>
-   node bin/office.mjs folders
-   node bin/office.mjs narrate      # rewrite today's AI narrative now
+   node bin/office.mjs narrate
    ```
-   Items added in a meeting carry a 🏫 mark on the blackboard. The meeting screen refreshes the facilitator's latest message and the blackboard every 2 seconds.
-4. **회의 끝** (end): copies the facilitator's latest list onto the blackboard once more, archives the facilitator session and appends a `## 회의 n` section (the agreed todos, the facilitator's last message) to the note. You can hold several meetings a day. Only the note's auto block (`<!-- office:auto:start -->` … `end -->`) is regenerated at each start; everything else is kept.
-5. **📓 업무일지 tab** (work log): a tab above the facilitator's seat shows today's AI narrative. **지금 쓰기** (write now) when there is none, **다시 쓰기** (rewrite) when there is (1–2 minutes; it runs in the background on the server while the screen shows progress). The facilitator tab also offers a button when the log is missing, since the facilitator then sees yesterday's flow too.
-6. **AI narrative**: while the server runs, once a day after 05:00 a model (`claude -p`, haiku) tells yesterday's sessions as a story per project plus a "남은 것" (still open) list, and puts it in a `## 어제 이야기` block (`<!-- office:narrative:start -->` … `end -->`) right after the auto block. The server checks at start and every 10 minutes and skips a note that already has one. To rewrite it: `node bin/office.mjs narrate`. The facilitator reads the note, so it sees the narrative too.
+
+The todo blackboard, session assignment and the meeting room were removed on 2026-10-01. They were hardly used, and the 결재 보고's "다음 작업" (next tasks) with the **OK** button already plays the todo role inside the sessions. Why, and how to bring them back: [removal record](docs/specs/2026-10-01-remove-todo-blackboard.md) (Korean).
 
 ## Detail panel
 
@@ -243,7 +210,7 @@ The **meeting room door** next to the blackboard (it swings open on hover; while
 
 - **보류** (hold) moves the card to the hold column and does nothing else. Held cards stay on the board past 24 hours.
 - **아카이브** (archive) removes the card from the office and the board. **모두 아카이브** (archive all) in the done column's header clears that column in one click.
-- **🗄️ 보관함** (archive list, in the header) lists archived work as name · date · one-line summary. **복구** (restore) puts it back in the hold column. Below it, **지난 할 일** (past todos) keeps the todos that left the blackboard (done before today, or deleted) with their result and the sessions they went through (joined with →).
+- **🗄️ 보관함** (archive list, in the header) lists archived work as name · date · one-line summary. **복구** (restore) puts it back in the hold column.
 - If you send a new prompt to a held, archived, or confirmed session, it returns to its normal state automatically.
 
 ## Uninstall
@@ -252,7 +219,7 @@ The **meeting room door** next to the blackboard (it swings open on hover; while
 node install.mjs --uninstall
 ```
 
-This removes only the office hooks and the facilitator read rules. Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office` (decisions, renames, todos, daily notes, the facilitator guide and the event history live there). To drop only the event history, `rm -rf ~/.claude/office/events` (wait times fall back to the last event and the last-turn time goes blank). The dashboard only reads app data and sessions, so nothing else changes.
+This removes only the office hooks (and the facilitator read rules an older version added). Then delete the `## 결재 보고 (Claude Office)` block from `~/.claude/CLAUDE.md` and run `rm -rf ~/.claude/office` (decisions, renames, daily notes and the event history live there, plus an older version's todos, links and facilitator guide). To drop only the event history, `rm -rf ~/.claude/office/events` (wait times fall back to the last event and the last-turn time goes blank). The dashboard only reads app data and sessions, so nothing else changes.
 
 ## Tests
 
@@ -266,10 +233,8 @@ node scripts/metrics.mjs
 - Session titles and chat deep links come from the desktop app's internal files (`~/Library/Application Support/Claude/claude-code-sessions`). They are not a public API. If an app update changes them, titles fall back to folder names and deep links disappear. State tracking keeps working because it uses hooks.
 - Hooks are registered with this folder's absolute path. If you move the folder, run `node install.mjs` again. Until you do, the hook exits with an error; sessions keep working but may show a hook error.
 - No deep link that fills an existing chat's input box was found in the app, so confirm goes through the clipboard (⌘V, Enter). New sessions use the `claude://code/new?q=…` deep link, which fills the input box without sending it.
-- You talk to the meeting facilitator in the app's chat; the meeting screen shows only its latest message.
-- Meetings and notes use the server's local date. A meeting that crosses midnight is no longer found as "today's".
+- Notes use the server's local date.
 - The AI narrative runs on a timer inside the server, so nothing is written while the server is off (it checks as soon as it starts). To run it without the server, put `node bin/office.mjs narrate` in cron/launchd. The narrative is a model summary and can be wrong (for example, blending two sessions into one sentence).
-- Todo ↔ session links rely on the `#todo-…` marker in a new session's first prompt. Delete that line before sending and the session won't link (start it from the blackboard again).
 - Dragging cards needs a mouse. From the keyboard, the detail panel's hold / unhold / confirm buttons do the same.
 - The event history is never pruned automatically. A line is about 50 bytes, so even a 200-turn session is around 30KB, and the server reads only the last 64KB.
 - No token or cost figures yet (it needs an incremental read of the whole transcript; see [event history design §7](docs/specs/2026-09-29-event-history-design.md)).

@@ -10,14 +10,13 @@
 <link rel="stylesheet" href="css/panel.css">
 <link rel="stylesheet" href="css/markdown.css">
 <link rel="stylesheet" href="css/changes.css">
-<link rel="stylesheet" href="css/blackboard.css">
-<link rel="stylesheet" href="css/meeting.css">
 </head>
 <body>
 <header class="topbar">
   <h1>오늘의 사무실</h1>
   <span id="freshness" class="freshness">연결 중…</span><!-- views/freshness.js -->
   <div class="counters" role="group" aria-label="필터"></div><!-- buttons from views/filters.js FILTERS -->
+  <button id="journal-open" class="icon-btn archive-btn" type="button" title="업무일지 · 어제 세션을 AI가 정리한 이야기">📓 업무일지</button>
   <button id="archive-open" class="icon-btn archive-btn" type="button" title="보관함" data-drop="archive">🗄️ 보관함</button>
   <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" title="알림 소리">🔔</button>
   <button id="legend-open" class="icon-btn" type="button" popovertarget="legend" title="범례 · 도움말" aria-label="범례 · 도움말">?</button>
@@ -51,6 +50,7 @@
     <dt>출근</dt><dd>사무실에 앉은 세션 수 (최근 24시간 활동 + 보류, 최대 20석)</dd>
     <dt>결재 대기</dt><dd>보고·보고 없음·막힘 세션 수. 탭 제목 숫자와 같아요</dd>
     <dt>n초 전 갱신</dt><dd>2초마다 새로 받아와요. 서버가 꺼지면 <b>오프라인</b>으로 바뀌어요</dd>
+    <dt>📓 업무일지</dt><dd>어제 세션을 AI가 이야기로 정리해요. 매일 05시 이후 한 번 저절로 쓰고, 열어서 다시 쓸 수도 있어요</dd>
   </dl>
 </div>
 <div class="notice" id="notice-empty" hidden>
@@ -65,49 +65,28 @@
 <div class="stage">
   <div class="main-col">
     <section class="office" aria-label="사무실">
-      <aside class="blackboard" id="blackboard" aria-label="오늘의 할 일"></aside><!-- views/blackboard.js -->
-      <div class="split-x" id="split-blackboard"></div>
       <div class="office-decor">
-        <!-- the way into the 회의실, right beside the blackboard (main.js [data-screen]); its twin in views/meeting.js leads back -->
-        <button type="button" class="door" data-screen="meeting" title="회의실 들어가기">
-          <svg class="door-svg" viewBox="0 -8 32 56" aria-hidden="true">
-            <rect x="11" y="-7" width="10" height="5" rx="1" class="door-lamp"/><!-- lit while a meeting is on (views/office.js updateDoor) -->
-            <rect x="15" y="-2" width="2" height="2" class="door-frame"/>
-            <rect x="0" y="0" width="32" height="48" class="door-frame"/>
-            <rect x="3" y="3" width="26" height="45" class="door-gap"/>
-            <g class="door-leaf">
-              <rect x="3" y="3" width="26" height="45" class="door-wood"/>
-              <rect x="7.5" y="7.5" width="17" height="14" class="door-panel"/>
-              <rect x="7.5" y="27.5" width="17" height="16" class="door-panel"/>
-              <rect x="22" y="23" width="3" height="3" class="door-knob"/>
-            </g>
-          </svg>
-          <span class="door-sign">회의실</span>
-        </button>
-        <div class="decor-stack">
-          <svg id="window-svg" class="decor window" viewBox="0 0 100 70" aria-hidden="true">
-            <rect x="2" y="2" width="96" height="66" rx="4" class="frame"/>
-            <rect x="8" y="8" width="84" height="54" class="sky"/>
-            <rect x="24" y="18" width="16" height="16" class="sun" fill="var(--sun)"/>
-            <rect x="24" y="18" width="16" height="16" class="moon" fill="var(--moon)"/>
-            <rect x="60" y="16" width="3" height="3" class="star" fill="var(--star)"/>
-            <rect x="70" y="26" width="2" height="2" class="star" fill="var(--star)"/>
-            <rect x="78" y="14" width="2" height="2" class="star" fill="var(--star)"/>
-            <line x1="50" y1="8" x2="50" y2="62" class="mullion"/>
-            <line x1="8" y1="35" x2="92" y2="35" class="mullion"/>
-          </svg>
-          <svg class="decor plant" viewBox="0 0 40 60" aria-hidden="true">
-            <rect x="12" y="42" width="16" height="14" fill="var(--desk-edge)"/>
-            <rect x="10" y="40" width="20" height="4" fill="var(--desk)"/>
-            <rect x="14" y="18" width="6" height="24" fill="#6b8f57"/>
-            <rect x="8" y="10" width="12" height="12" fill="#7fae63"/>
-            <rect x="20" y="16" width="12" height="12" fill="#6b8f57"/>
-            <rect x="14" y="4" width="12" height="12" fill="#8fc274"/>
-          </svg>
-        </div>
+        <svg id="window-svg" class="decor window" viewBox="0 0 100 70" aria-hidden="true">
+          <rect x="2" y="2" width="96" height="66" rx="4" class="frame"/>
+          <rect x="8" y="8" width="84" height="54" class="sky"/>
+          <rect x="24" y="18" width="16" height="16" class="sun" fill="var(--sun)"/>
+          <rect x="24" y="18" width="16" height="16" class="moon" fill="var(--moon)"/>
+          <rect x="60" y="16" width="3" height="3" class="star" fill="var(--star)"/>
+          <rect x="70" y="26" width="2" height="2" class="star" fill="var(--star)"/>
+          <rect x="78" y="14" width="2" height="2" class="star" fill="var(--star)"/>
+          <line x1="50" y1="8" x2="50" y2="62" class="mullion"/>
+          <line x1="8" y1="35" x2="92" y2="35" class="mullion"/>
+        </svg>
+        <svg class="decor plant" viewBox="0 0 40 60" aria-hidden="true">
+          <rect x="12" y="42" width="16" height="14" fill="var(--desk-edge)"/>
+          <rect x="10" y="40" width="20" height="4" fill="var(--desk)"/>
+          <rect x="14" y="18" width="6" height="24" fill="#6b8f57"/>
+          <rect x="8" y="10" width="12" height="12" fill="#7fae63"/>
+          <rect x="20" y="16" width="12" height="12" fill="#6b8f57"/>
+          <rect x="14" y="4" width="12" height="12" fill="#8fc274"/>
+        </svg>
       </div>
       <div class="desks" id="desks"></div>
-      <section class="meeting" id="meeting" aria-label="회의실" hidden></section><!-- views/meeting.js -->
     </section>
     <div class="split-y" id="split-office"></div>
     <section class="kanban" aria-label="결재함">
@@ -143,9 +122,11 @@
   <div class="archive-head"><h2 id="archive-title">보관함</h2><button type="button" class="panel-close" id="archive-close" aria-label="닫기">✕</button></div>
   <div id="archive-body">
     <div id="archive-sessions"></div>
-    <h3 class="archive-sub">지난 할 일</h3>
-    <div id="archive-todos"></div><!-- views/archive.js, docs/specs/2026-09-29-todo-history-design.md §3.6 -->
   </div>
+</dialog>
+<dialog id="journal-dialog" class="archive-dialog" aria-labelledby="journal-title">
+  <div class="archive-head"><h2 id="journal-title">📓 업무일지</h2><button type="button" class="panel-close" id="journal-close" aria-label="닫기">✕</button></div>
+  <div id="journal-body"></div><!-- views/journal.js -->
 </dialog>
 </body>
 </html>

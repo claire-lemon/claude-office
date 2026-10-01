@@ -1,8 +1,6 @@
 /* office.css: office section, desk/character svg poses, speech bubbles, day/night window */
   .office{background:var(--bg-panel); border:1px solid var(--line); border-radius:16px; padding:12px; position:relative; display:flex; gap:12px; align-items:flex-start; margin-bottom:12px;}
-  /* door | window over plant, side by side: a short office never cuts the door off */
-  .office-decor{display:flex; align-items:flex-start; gap:10px; flex:none;}
-  .decor-stack{display:flex; flex-direction:column; align-items:center; gap:8px;}
+  .office-decor{display:flex; flex-direction:column; align-items:center; gap:8px; flex:none;}
   .decor{display:block;}
   .window{width:64px; height:42px;}
   .window .frame{fill:var(--desk-edge);}
@@ -13,39 +11,13 @@
   .window.night .moon,.window.night .star{display:block;}
   .window .mullion{stroke:var(--desk-edge); stroke-width:2;}
   .plant{width:28px; height:42px;}
-  /* 회의실 doors (index.html office-decor, views/meeting.js exit): the leaf swings open on hover to the room's light */
-  .door{display:flex; flex-direction:column; align-items:center; gap:2px; padding:0; background:none; border:none; color:var(--ink);}
-  .door-svg{display:block; width:40px; height:auto; shape-rendering:crispEdges; overflow:visible;}
-  /* about a desk tall, and never taller than the office leaves room for (padding, border, sign): --office-h from views/layout.js */
-  .office-decor .door{--door-h:clamp(56px, calc(var(--office-h, 300px) - 56px), 120px);}
-  .office-decor .door-svg{height:var(--door-h); width:calc(var(--door-h) * 4 / 7);} /* viewBox 32 x 56 */
-  .office-decor .door-sign{font-size:12px;}
-  .door-frame{fill:var(--desk-edge);}
-  .door-gap{fill:#ffe7a8;}
-  .door-wood{fill:var(--desk);}
-  .door-panel{fill:none; stroke:var(--desk-edge); stroke-width:1.5;}
-  .door-knob{fill:var(--sun);}
-  .door-leaf{transform-box:fill-box; transform-origin:left center; transition:transform .2s ease;}
-  .door:hover .door-leaf,.door:focus-visible .door-leaf{transform:scaleX(.6);}
-  /* 회의 중: the lamp glows, the door stands ajar and the sign says so (views/office.js updateDoor) */
-  .door-lamp{fill:var(--line);}
-  .door.on .door-lamp{fill:#ff7a7a; animation:lamp-glow 1.6s ease-in-out infinite;}
-  .door.on .door-leaf{transform:scaleX(.88);}
-  .door.on:hover .door-leaf,.door.on:focus-visible .door-leaf{transform:scaleX(.6);}
-  .door.on .door-sign{background:var(--accent); border-color:var(--accent); color:#4a3b2f;}
-  .door.on.busy .door-lamp{animation:lamp-blink .5s steps(1) infinite;} /* 정리 중 */
-  @keyframes lamp-glow{0%,100%{filter:drop-shadow(0 0 1px #ff7a7a)} 50%{filter:drop-shadow(0 0 4px #ff7a7a)}}
-  @keyframes lamp-blink{0%{fill:#ff7a7a; filter:drop-shadow(0 0 4px #ff7a7a)} 50%{fill:var(--line); filter:none}}
-  .door:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px;}
-  .door-sign{font-size:11px; font-weight:600; line-height:16px; padding:0 6px; background:var(--bg); border:1px solid var(--line); border-radius:6px; white-space:nowrap;}
 
   /* desk size and column count come from views/layout.js (fitGrid) via --desk-w / --desk-cols */
   .desks{flex:1; min-width:0; display:grid; grid-template-columns:repeat(var(--desk-cols, 5), minmax(0, var(--desk-w, 104px))); justify-content:center; gap:8px;}
   .desks-empty{grid-column:1 / -1; margin:0; padding:24px 0; text-align:center;}
   @media (min-width:800px){ .office{margin-bottom:0; overflow-y:auto;} } /* min-size desks scroll inside the office */
-  @media (max-width:799.98px){ .office{flex-wrap:wrap;} } /* the blackboard takes its own row above the desks (blackboard.css) */
-  /* phones: only the door stays in the decor column, bubbles shrink to their icon so they don't cover the animals */
-  @media (max-width:640px){ .office-decor .decor-stack{display:none;} .bubble .b-text,.bubble .b-paper{display:none;} }
+  /* phones: no decor column, bubbles shrink to their icon so they don't cover the animals */
+  @media (max-width:640px){ .office-decor{display:none;} .bubble .b-text,.bubble .b-paper{display:none;} }
   .desk{position:relative; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:6px 6px 8px; display:flex; flex-direction:column; align-items:center; min-width:0;}
   .desk.occupied{cursor:pointer;}
   .desk.occupied:hover{box-shadow:var(--shadow); transform:translateY(-1px);}
