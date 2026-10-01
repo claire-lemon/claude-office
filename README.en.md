@@ -117,6 +117,39 @@ The read rules open `Read` for exactly two places: `~/.claude/office/CLAUDE.md` 
 
 Hooks only see turns that start **after** installation. Older sessions active in the last 24 hours show up grey (state unknown). If there are app sessions but no hook record at all, a banner under the header says to run `node install.mjs`; with no sessions at all, it shows the three setup steps.
 
+### Keep it running (macOS)
+
+Instead of `node server.mjs`, register a user LaunchAgent: the server starts at login and comes back about 10 seconds after it stops. Run this once from this folder (it is a user item in `~/Library/LaunchAgents`, not a system setting).
+
+```bash
+mkdir -p ~/.claude/office && cat > ~/Library/LaunchAgents/local.claude-office.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.claude-office</string>
+  <key>ProgramArguments</key>
+  <array><string>$(command -v node)</string><string>$PWD/server.mjs</string></array>
+  <key>WorkingDirectory</key><string>$PWD</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>$(dirname "$(command -v node)"):$(dirname "$(command -v claude)"):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>$HOME/.claude/office/server.log</string>
+  <key>StandardErrorPath</key><string>$HOME/.claude/office/server.log</string>
+</dict>
+</plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.claude-office.plist
+```
+
+1. Restart after changing server code: `launchctl kickstart -k gui/$(id -u)/local.claude-office`
+2. Unregister: `launchctl bootout gui/$(id -u)/local.claude-office`, then delete `~/Library/LaunchAgents/local.claude-office.plist`
+3. Log: `~/.claude/office/server.log`
+4. While it is registered, don't start `node server.mjs` yourself (port 7777 would clash). The demo uses another port (7770), so it is fine.
+5. The plist holds the node path, so after a node upgrade or moving this folder, unregister and run the block again.
+
 ## Office and board
 
 - **Header**: `출근` (checked in) is the number of seated sessions (active in the last 24 hours, plus held ones, 20 desks max). `결재 대기` (awaiting approval) counts reports, 보고 없음 (no report) and blocked sessions, and is the same number as the tab title `(n) 결재 대기`. A session newly entering it (blocked included) plays the sound and sends a browser notification. `n초 전 갱신` (updated n s ago) is when the last poll succeeded; if the server can't be reached it turns into a red **오프라인** (offline) badge and the screen keeps the last data. The **?** button explains bubbles, colors, tags and numbers.

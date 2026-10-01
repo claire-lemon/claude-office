@@ -116,6 +116,39 @@ node scripts/demo.mjs public 7770
 
 hooks는 설치 **이후** 시작된 턴부터 잡힌다. 설치 전 세션은 24시간 이내 활동분만 회색(상태 미상)으로 보인다. 앱 세션은 있는데 hook 기록이 하나도 없으면 헤더 아래에 `node install.mjs` 안내가 뜨고, 세션이 하나도 없으면 3단계 설치 안내가 뜬다.
 
+### 항상 띄워 두기 (macOS)
+
+`node server.mjs` 대신 사용자 LaunchAgent로 등록하면 로그인할 때 서버가 켜지고, 서버가 죽어도 10초쯤 뒤 다시 켜진다. 이 폴더에서 한 번 실행한다(시스템 설정이 아니라 `~/Library/LaunchAgents`의 사용자 항목이다).
+
+```bash
+mkdir -p ~/.claude/office && cat > ~/Library/LaunchAgents/local.claude-office.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.claude-office</string>
+  <key>ProgramArguments</key>
+  <array><string>$(command -v node)</string><string>$PWD/server.mjs</string></array>
+  <key>WorkingDirectory</key><string>$PWD</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>$(dirname "$(command -v node)"):$(dirname "$(command -v claude)"):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>$HOME/.claude/office/server.log</string>
+  <key>StandardErrorPath</key><string>$HOME/.claude/office/server.log</string>
+</dict>
+</plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.claude-office.plist
+```
+
+1. 서버 코드를 바꾼 뒤 재시작: `launchctl kickstart -k gui/$(id -u)/local.claude-office`
+2. 등록 해제: `launchctl bootout gui/$(id -u)/local.claude-office` 후 `~/Library/LaunchAgents/local.claude-office.plist` 삭제
+3. 로그: `~/.claude/office/server.log`
+4. 등록해 둔 동안 `node server.mjs`를 따로 띄우지 않는다(포트 7777이 겹친다). 데모는 다른 포트(7770)라 괜찮다.
+5. node 경로가 plist에 들어가므로 node 버전을 바꾸거나 폴더를 옮기면 등록 해제 후 위 블록을 다시 실행한다.
+
 ## 사무실과 결재함
 
 - **헤더**: `출근`은 사무실에 앉은 세션 수(최근 24시간 + 보류, 최대 20석), `결재 대기`는 보고·보고 없음·막힘 세션 수이고 탭 제목 `(n) 결재 대기`와 같은 숫자다. 새 세션이 결재 대기에 들어오면(막힘 포함) 알림 소리와 브라우저 알림이 나간다. 옆의 `n초 전 갱신`은 마지막으로 서버에서 받아온 시각이고, 서버에 연결하지 못하면 빨간 **오프라인**으로 바뀐다(화면은 마지막 데이터 그대로). **?** 버튼은 말풍선·색·태그·숫자의 뜻을 보여준다.
