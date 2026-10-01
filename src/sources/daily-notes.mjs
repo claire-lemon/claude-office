@@ -13,7 +13,7 @@ export const read = date => {
     }
 };
 
-// Atomic (tmp + rename): the facilitator session may be reading the note while the server rewrites it.
+// Atomic (tmp + rename): an editor (Obsidian, …) may be reading the note while the server rewrites it.
 export const write = (date, text) => {
     const file = pathFor(date);
     fs.mkdirSync(DAILY_DIR, { recursive: true });

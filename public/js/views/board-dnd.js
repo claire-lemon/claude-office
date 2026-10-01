@@ -1,5 +1,5 @@
 import * as api from '../api.js';
-import { state, drag, selected, controls, todos } from '../store.js';
+import { state, drag, selected, controls } from '../store.js';
 import { MOVE_HINT, MOVE_TOAST } from './columns.js';
 import { flashPanelError } from './toast.js';
 
@@ -7,27 +7,12 @@ import { flashPanelError } from './toast.js';
 // target is any element with data-drop="<move to>": the 결재함 columns and the header's 🗄️ 보관함
 // button. Where a card may go comes from session.moves (server), so a new target is one data-drop
 // attribute plus one server rule. Keyboard users get the same moves from the panel buttons.
-// A blackboard item (data-drop-todo="<todo id>", views/blackboard.js) assigns the card's session to
-// that todo instead (finishing-touches design §4.3.1); the panel's 할 일 row does the same by keyboard.
 const over = { el: null };
 const DROP_CLASSES = ['drop-ok', 'drop-no', 'drop-over'];
-const DROP_SEL = '[data-drop],[data-drop-todo]';
 
 const elementOf = node => (node && node.nodeType === Node.TEXT_NODE ? node.parentElement : node);
-const targetOf = node => elementOf(node)?.closest?.(DROP_SEL) ?? null;
-const targets = (sel = DROP_SEL) => Array.from(document.querySelectorAll(sel));
-
-// Same wording as the panel's 할 일 row (panel/panel.js; views/ and panel/ don't import each other).
-const assign = async (todoId, sessionId) => {
-  const title = todos.list.find(t => t.id === todoId)?.title ?? '할 일';
-  try {
-    const res = await api.patchTodo(todoId, { assign: sessionId });
-    const data = await res.json().catch(() => ({}));
-    flashPanelError(res.ok && data.ok ? `📋 ${title}에 배정했어요` : res.status === 409 ? '칠판에서 시작한 세션이라 옮길 수 없어요' : '배정하지 못했어요');
-  } catch {
-    flashPanelError('배정하지 못했어요');
-  }
-};
+const targetOf = node => elementOf(node)?.closest?.('[data-drop]') ?? null;
+const targets = () => Array.from(document.querySelectorAll('[data-drop]'));
 
 const setOver = el => {
   if (over.el === el) return;
@@ -45,17 +30,11 @@ export const mountBoardDnd = (columnsEl, { onEnd }) => {
     e.dataTransfer.setData('text/plain', session.id);
     e.dataTransfer.effectAllowed = 'move';
     const hints = new Map((session.moves || []).map(m => [m.to, MOVE_HINT[m.action] ?? '']));
-    targets('[data-drop]').forEach(t => {
+    targets().forEach(t => {
       const id = t.dataset.drop;
       t.classList.toggle('drop-ok', hints.has(id));
       t.classList.toggle('drop-no', !hints.has(id) && id !== session.column);
       if (hints.has(id)) t.dataset.hint = hints.get(id);
-    });
-    // Any open todo but the session's own. A marker-linked session is refused by the server (409 toast).
-    targets('[data-drop-todo]').forEach(t => {
-      if (t.dataset.dropTodo === session.todoId) return;
-      t.classList.add('drop-ok');
-      t.dataset.hint = '여기 놓으면 배정';
     });
   });
 
@@ -80,7 +59,6 @@ export const mountBoardDnd = (columnsEl, { onEnd }) => {
     const session = id && state.sessionsById.get(id);
     if (!target || !session) return;
     e.preventDefault();
-    if (target.dataset.dropTodo) { await assign(target.dataset.dropTodo, id); controls.poll(); return; }
     const to = target.dataset.drop;
     // Optimistic: dragend re-renders right after this, before the move lands; without it the card
     // would flash back into its old column until the poll ('archive' matches no column, so the card

@@ -6,9 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { markerLine } from '../src/domain/todo.mjs';
-import { meetingId, meetingPrompt } from '../src/domain/meeting.mjs';
-import { localDate } from '../src/domain/daily-note.mjs';
+import { localDate, narrativeSection, replaceNarrative, startOfYesterday } from '../src/domain/daily-note.mjs';
 
 const HOME = process.env.OFFICE_HOME;
 if (!HOME || path.resolve(HOME) === os.homedir()) {
@@ -75,33 +73,11 @@ const repoDir = n => {
     return dir;
 };
 
-// 오늘의 할 일: one open, one linked to local_3 through the marker, one checked off by hand today.
-const LINKED_TODO = 'demo02';
-const TODOS = path.join(HOME, '.claude/office/todos.json');
-if (!fs.existsSync(TODOS)) {
-    const now = Date.now();
-    const todo = (title, folder, createdAt, manual = null) => ({ title, detail: '', folder, createdAt, source: 'manual', manual, deletedAt: null });
-    fs.mkdirSync(path.dirname(TODOS), { recursive: true });
-    fs.writeFileSync(
-        TODOS,
-        JSON.stringify({
-            demo01: { ...todo('결제 모듈 리팩터링', repoDir(0), now - 3000), detail: 'PG 응답 파싱을 use-case로 옮기기' },
-            [LINKED_TODO]: todo(TITLES[3], repoDir(0), now - 2000),
-            demo03: todo('주간 회의록 공유', repoDir(1), now - 1000, { state: 'done', at: now }),
-        }),
-    );
-}
-
 const sessions = TITLES.map((title, i) => {
     const cli = `cli-${i}`;
     const cwd = i === 0 ? repo : path.join(HOME, 'work', `w${i}`);
     const transcript = path.join(HOME, '.claude/projects/p', `${cli}.jsonl`);
     fs.mkdirSync(path.dirname(transcript), { recursive: true });
-    // local_3 was started from a 칠판 todo: its first prompt line carries the marker (must be the file's top line).
-    if (i === 3 && !fs.existsSync(transcript)) {
-        const content = markerLine(LINKED_TODO, title);
-        fs.writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`);
-    }
     fs.mkdirSync(APP, { recursive: true });
     fs.writeFileSync(
         path.join(APP, `local_${i}.json`),
@@ -117,89 +93,48 @@ const sessions = TITLES.map((title, i) => {
     return { cli, cwd, transcript };
 });
 
-// 회의실: today's facilitator (first prompt = the meeting marker) waiting on the user, plus today's 일지.
-// Demo mode only: --once is the office test's fixture, which counts exactly 10 sessions.
-const MEETING_MESSAGE = `어제 기록 정리했어요.
-
-### 어제 끝낸 일
-1. 뷰에 \`workspace$\` 요약 객체 추가 완료
-2. 주간 회의록 공유 완료
-
-### 못 끝낸 일
-1. 주간 문서 자동화
-   1. 오늘 그대로 이어갈까요?
-2. 채팅 알림 버그
-   1. 원인 조사 중, 이어갈까요?
-
-### 오늘 추천
-1. 결제 모듈 리팩터링
-   1. 어제 칠판에 남은 항목
-2. my-types 패키지 버전 올려 배포
-   1. API가 새 타입을 쓰려면 선배포 필요
-
-오늘 할 일로 확정할 항목을 골라주세요.`;
-const seedMeeting = async () => {
-    const officeDir = path.join(HOME, '.claude/office');
-    const today = localDate(Date.now());
-    const cli = 'cli-10';
-    const transcript = path.join(HOME, '.claude/projects/p', `${cli}.jsonl`);
-    if (!fs.existsSync(transcript)) {
-        const content = meetingPrompt(meetingId(today, 1), path.join(officeDir, 'daily', `${today}.md`));
-        fs.writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`);
-        say(transcript, MEETING_MESSAGE);
-    }
-    fs.writeFileSync(
-        path.join(APP, 'local_10.json'),
-        JSON.stringify({
-            sessionId: 'local_10', cliSessionId: cli, title: '데일리 스크럼 진행자', cwd: officeDir, originCwd: officeDir,
-            worktreePath: null, prs: [], completedTurns: 1, createdAt: Date.now() - 5 * 60_000, lastActivityAt: Date.now(), isArchived: false,
-        }),
-    );
-    hook(cli, 'Stop', officeDir, transcript);
-    // config reads OFFICE_HOME at import time; it is set (checked above), so this writes only under it.
-    const { refreshNote } = await import('../src/usecases/meeting.mjs');
-    refreshNote();
-};
-
-// 연결 기록: an archived first try of the linked todo (so it has 2 sessions), a todo finished yesterday through an
-// archived session and one deleted yesterday (보관함 "지난 할 일", the note's 할 일 기록). No hook state: a hook
-// event would be newer than the archive decision and bring the session back.
-const seedHistory = async () => {
+// 업무일지: two sessions archived yesterday (so 어제 세션 has finished work too), then today's note with its auto
+// block and a sample AI 서술 (the demo never calls the model). No hook state for the archived ones: a hook event
+// would be newer than the archive decision and bring the session back. Demo mode only: --once is the office
+// test's fixture, which counts exactly 10 sessions.
+const DEMO_NARRATIVE = `1. **web-app 인프라 구조**: 결제 모듈을 나누기 전에 인프라 구조부터 정리했다. 모듈 경계를 문서로 먼저 맞추고 \`feat/s1\`에서 뷰에 \`workspace$\` 요약 객체를 붙여 결재 대기에 올렸다.
+2. **배포 스크립트**: 배포 스크립트를 한 파일로 모아 정리했고, 저녁에 보관함으로 옮겼다.
+3. **남은 것**
+   1. 채팅 알림 버그 원인 조사 중
+   2. 타입 패키지 버전 전파는 기준 브랜치 답변 대기`;
+const seedJournal = async () => {
     const { transcriptPathFor } = await import('../src/sources/transcripts.mjs');
     const officeDir = path.join(HOME, '.claude/office');
     const d = new Date();
     const yesterday = (h, m = 0) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, h, m).getTime();
     const past = [
-        { n: 11, title: `${TITLES[3]} 1차`, todoId: LINKED_TODO, folder: repoDir(0), lastAt: yesterday(10, 40), archivedAt: yesterday(11, 2) },
-        { n: 12, title: '배포 스크립트 정리', todoId: 'demo04', folder: repoDir(2), lastAt: yesterday(18, 0), archivedAt: yesterday(18, 20) },
+        { n: 11, title: '인프라 구조 정리 1차', folder: repoDir(0), lastAt: yesterday(10, 40), archivedAt: yesterday(11, 2) },
+        { n: 12, title: '배포 스크립트 정리', folder: repoDir(2), lastAt: yesterday(18, 0), archivedAt: yesterday(18, 20) },
     ];
     const decisionsFile = path.join(officeDir, 'decisions.json');
     const decisions = fs.existsSync(decisionsFile) ? JSON.parse(fs.readFileSync(decisionsFile, 'utf8')) : {};
-    past.forEach(({ n, title, todoId, folder, lastAt, archivedAt }) => {
+    past.forEach(({ n, title, folder, lastAt, archivedAt }) => {
         const cli = `cli-${n}`;
         const cwd = path.join(HOME, 'work', `w${n}`);
         const transcript = transcriptPathFor(cwd, cli);
         fs.mkdirSync(path.dirname(transcript), { recursive: true });
-        fs.writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content: markerLine(todoId, title) } })}\n`);
+        fs.writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content: title } })}\n`);
         fs.writeFileSync(
             path.join(APP, `local_${n}.json`),
             JSON.stringify({ sessionId: `local_${n}`, cliSessionId: cli, title, cwd, originCwd: folder, worktreePath: null, prs: [], completedTurns: 2, lastActivityAt: lastAt, isArchived: false }),
         );
         decisions[`local_${n}`] = { kind: 'archive', at: archivedAt, title, summary: '', lastAt };
     });
+    fs.mkdirSync(officeDir, { recursive: true });
     fs.writeFileSync(decisionsFile, JSON.stringify(decisions));
-    const todo = (title, folder, extra) => ({ title, detail: '', folder, createdAt: yesterday(9), source: 'manual', manual: null, deletedAt: null, ...extra });
-    const stored = JSON.parse(fs.readFileSync(TODOS, 'utf8'));
-    fs.writeFileSync(
-        TODOS,
-        JSON.stringify({
-            ...stored,
-            // 세션 배정: local_1 (no marker) was started from the app and put on demo01 by hand.
-            ...(stored.demo01 ? { demo01: { ...stored.demo01, assigned: ['local_1'] } } : {}),
-            demo04: todo('배포 스크립트 정리', repoDir(2)),
-            demo05: todo('로그 수집기 교체', repoDir(2), { deletedAt: yesterday(15) }),
-        }),
-    );
+    // config reads OFFICE_HOME at import time; it is set (checked above), so this writes only under it.
+    const { refreshNote } = await import('../src/usecases/narrate.mjs');
+    const notes = await import('../src/sources/daily-notes.mjs');
+    refreshNote();
+    const now = Date.now();
+    const date = localDate(now);
+    const section = narrativeSection({ at: now, since: startOfYesterday(now), count: past.length + TITLES.length, body: DEMO_NARRATIVE });
+    notes.write(date, replaceNarrative(notes.read(date), section, date));
 };
 
 const EVENTS = ['UserPromptSubmit', 'Stop-report', 'Notification', 'Stop-question', 'UserPromptSubmit'];
@@ -214,8 +149,7 @@ const tick = n =>
 
 tick(0);
 if (!process.argv.includes('--once')) {
-    await seedHistory();
-    await seedMeeting();
+    await seedJournal();
     const loop = n => setTimeout(() => (tick(n), loop(n + 1)), 8000);
     loop(1);
     console.log(`simulating 10 sessions under ${HOME} (every 8s)`);

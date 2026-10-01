@@ -7,10 +7,7 @@ import { startNextTask } from '../usecases/next-task.mjs';
 import { summarize } from '../usecases/summarize.mjs';
 import { moveSession } from '../usecases/move.mjs';
 import { editSession } from '../usecases/edit-session.mjs';
-import { listTodos, todoHistory, createTodo, updateTodo, deleteTodo, startTodo } from '../usecases/todos.mjs';
-import { getMeeting, startMeeting, endMeeting } from '../usecases/meeting.mjs';
-import { narrateInBackground } from '../usecases/narrate.mjs';
-import { refineTodo } from '../usecases/refine-todo.mjs';
+import { narrateInBackground, getJournal } from '../usecases/narrate.mjs';
 import { readJsonBody } from './body.mjs';
 
 export const send = (res, code, body, type = 'application/json; charset=utf-8') => {
@@ -19,17 +16,6 @@ export const send = (res, code, body, type = 'application/json; charset=utf-8') 
 };
 
 const findSession = id => listSessions().find(s => s.id === id);
-
-// A 2000-char Korean detail is ~6KB of JSON, over readJsonBody's 4KB default.
-const TODO_BODY_LIMIT = 16 * 1024;
-// Todo usecase errors that mean "no such thing" / "taken by a marker link"; every other one is a bad request.
-const TODO_NOT_FOUND = new Set(['unknown todo', 'repo folder not found', 'unknown session']);
-const TODO_CONFLICT = new Set(['already linked']);
-const todoError = (res, error) => send(res, TODO_NOT_FOUND.has(error) ? 404 : TODO_CONFLICT.has(error) ? 409 : 400, { error });
-// POST /api/meeting/<action>: the id segment picks the action. narrate only starts the run (202); the 회의실
-// polls GET /api/meeting for its narrative state.
-const MEETING_ACTIONS = { start: startMeeting, end: endMeeting, narrate: () => narrateInBackground() };
-const MEETING_STATUS = { narrate: 202 };
 
 export const routes = {
     'GET /api/sessions': (req, res) => send(res, 200, { now: Date.now(), sessions: listSessions(), hooksInstalled: hooksInstalled() }),
@@ -99,37 +85,7 @@ export const routes = {
         if (result.error) return send(res, 400, { error: result.error });
         return send(res, 200, result);
     },
-    'GET /api/todos': (req, res) => send(res, 200, listTodos()),
-    // 보관함 "지난 할 일": todos the 칠판 no longer shows.
-    'GET /api/todo-history': (req, res) => send(res, 200, todoHistory()),
-    // One route key for both: no id = create (201), /api/todos/:id = update (done, deleted:false live here too).
-    'POST /api/todos': async (req, res, id) => {
-        const body = await readJsonBody(req, { limit: TODO_BODY_LIMIT });
-        if (!body.ok) return send(res, body.code, { error: body.error });
-        const result = id ? updateTodo(id, body.value) : createTodo(body.value);
-        if (result.error) return todoError(res, result.error);
-        return send(res, id ? 200 : 201, { ok: true, todo: result.todo });
-    },
-    'DELETE /api/todos': (req, res, id) => {
-        const result = deleteTodo(id);
-        if (result.error) return todoError(res, result.error);
-        return send(res, 200, { ok: true });
-    },
-    'POST /api/start': (req, res, id) => {
-        const result = startTodo(id);
-        if (result.error) return todoError(res, result.error);
-        return send(res, 200, { ok: true, opened: result.opened });
-    },
-    // ✨ 다듬기: nothing is saved; the 칠판 applies the suggestion through POST /api/todos/:id.
-    'POST /api/refine': async (req, res, id) => {
-        const result = await refineTodo(id).catch(() => ({ error: 'refine failed' }));
-        if (result.error === 'unknown todo') return send(res, 404, { error: result.error });
-        if (result.error) return send(res, 502, { error: '다듬지 못했어요' });
-        return send(res, 200, { ok: true, detail: result.detail });
-    },
-    'GET /api/meeting': (req, res) => send(res, 200, getMeeting()),
-    'POST /api/meeting': (req, res, id) =>
-        Object.hasOwn(MEETING_ACTIONS, id)
-            ? send(res, MEETING_STATUS[id] ?? 200, { ok: true, ...MEETING_ACTIONS[id]() })
-            : send(res, 404, { error: 'unknown action' }),
+    // 📓 업무일지: today's AI 서술 and the in-server run. POST only starts a run (202); the dialog polls GET.
+    'GET /api/journal': (req, res) => send(res, 200, getJournal()),
+    'POST /api/narrate': (req, res) => send(res, 202, { ok: true, ...narrateInBackground() }),
 };
